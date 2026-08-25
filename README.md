@@ -2,11 +2,11 @@
 
 *An autonomous, LLM-driven Cognitive Database Copilot designed to execute complex data analysis tasks across relational databases. The system seamlessly translates natural language into secure, executable Python/SQL code, evaluates its own execution results, and persists analytical insights across sessions using a custom dual-engine memory architecture.*
 
-## 🏁 Quick Start
+## Quick Start
 
 1. **Clone and Install Dependencies**
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/LykenL/NL2SQL-Agent.git
 cd data_copilot
 pip install -r requirements.txt
 ```
@@ -29,7 +29,7 @@ python evaluator.py
 
 ---
 
-## 🛠️ Technical Architecture
+## Technical Architecture
 
 ### 1. Autonomous Execution Sandbox (Native Tool Calling)
 *   **LLM Engine**: Powered by `Google Gemini 3.5 Flash`, utilizing structured Native Tool Calling.
@@ -45,7 +45,7 @@ Designed a decoupled memory system to handle both short-term interaction states 
 *   **Asynchronous Compression Agent**: Implemented a secondary background LLM agent triggered upon session termination. It digests the raw SQLite logs, extracts core insights (Entities, Actions, Logic/Results), and embeds them into ChromaDB using `all-MiniLM-L6-v2`.
 *   **Contextual KNN Retrieval**: Upon launching a new session, the system automatically performs a k-Nearest Neighbors (KNN) vector search on the user's prompt against ChromaDB, successfully injecting past logical conclusions into the context window (Zero-Shot Cross-Session Recall).
 
-## 📊 Empirical Performance & Metrics
+## Empirical Performance & Metrics
 Built a custom **Golden Dataset Evaluation Framework** to rigorously benchmark the agent's performance in a zero-shot environment.
 
 | Metric | Result | Description |
@@ -54,7 +54,4 @@ Built a custom **Golden Dataset Evaluation Framework** to rigorously benchmark t
 | **Average Token Usage** | **1,327 Tokens** / query | Highly optimized prompt engineering and memory compression kept token consumption minimal. |
 | **Execution Cost** | **<$0.002 USD** / query | Demonstrated extreme cost-efficiency suitable for scalable enterprise deployment. |
 
-## 🌟 Business Impact & Applications
-*   **Democratized Data Access**: Reduced the barrier to entry for business stakeholders, completely eliminating the need for manual SQL/Python scripting for standard reporting requests.
-*   **Scalability**: The decoupled architecture ensures that connecting to new enterprise databases requires zero code changes—only a driver installation and URI update.
-*   **Rate-Limit Resilience**: The asynchronous memory compression pipeline actively throttles requests, completely eliminating `429 Too Many Requests` API errors during intensive analytical sessions.
+
