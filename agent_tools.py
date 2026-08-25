@@ -13,8 +13,8 @@ def create_agent_tools(db_uri: str) -> list:
         Retrieves the complete JSON schema of the target relational database.
         Call this tool FIRST whenever you are asked to analyze data, so you know what tables and columns exist.
         """
-        print("\n[Tool execution] get_database_schema called. Pacing for rate limits (10s)...")
-        time.sleep(10)
+        print("\n[Tool execution] get_database_schema called. Pacing for rate limits (4s)...")
+        time.sleep(4)
         return extract_db_schema(db_uri)
         
     def execute_python_code(code_string: str) -> str:
@@ -26,8 +26,8 @@ def create_agent_tools(db_uri: str) -> list:
         Args:
             code_string: The raw executable Python code. Do not include markdown code block formatting (like ```python).
         """
-        print("\n[Tool execution] execute_python_code called. Pacing for rate limits (10s)...")
-        time.sleep(10)
+        print("\n[Tool execution] execute_python_code called. Pacing for rate limits (4s)...")
+        time.sleep(4)
         output = safe_execute(code_string, custom_globals={"db_uri": db_uri})
         
         # 【黑客技巧】：在大模型接收工具执行结果时，利用“近因效应”狠狠敲打它
