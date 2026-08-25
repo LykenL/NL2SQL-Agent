@@ -48,9 +48,22 @@ st.markdown("""
 
 # --- 2. Initialize State ---
 load_dotenv()
-api_key = os.getenv("GEMINI_API_KEY")
+api_key = None
+
+# Try loading from Streamlit Cloud Secrets first
+try:
+    if "GEMINI_API_KEY" in st.secrets:
+        api_key = st.secrets["GEMINI_API_KEY"]
+except Exception:
+    pass
+
+# Fallback to local .env file
 if not api_key:
-    st.error("GEMINI_API_KEY not found in .env file.")
+    api_key = os.getenv("GEMINI_API_KEY")
+
+if not api_key:
+    st.error("GEMINI_API_KEY not found.")
+    st.info("💡 **If running locally**: Add it to your `.env` file.\n\n💡 **If on Streamlit Cloud**: Go to `App Settings` -> `Secrets`, and paste: \n\n`GEMINI_API_KEY = \"your_api_key_here\"`")
     st.stop()
 
 @st.cache_resource
