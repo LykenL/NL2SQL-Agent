@@ -81,8 +81,16 @@ class SQLiteMemory:
                 GROUP BY h.session_id
                 ORDER BY last_time DESC
             ''')
-            # 返回 [{'id': sess_id, 'title': title}]
-            return [{"id": row[0], "title": row[2] or f"Session {row[0][:6]}"} for row in cursor.fetchall()]
+            
+            res = []
+            for row in cursor.fetchall():
+                sess_id = row[0]
+                title = row[2]
+                
+                if not title:
+                    title = "Generating Title..."
+                res.append({"id": sess_id, "title": title})
+            return res
 
 
 class VectorMemory:
