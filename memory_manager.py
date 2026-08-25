@@ -24,6 +24,13 @@ class SQLiteMemory:
                     content TEXT
                 )
             ''')
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS sessions (
+                    session_id TEXT PRIMARY KEY,
+                    title TEXT,
+                    created_at DATETIME
+                )
+            ''')
             
     def add_message(self, session_id: str, role: str, content: str):
         """保存单条聊天记录"""
@@ -54,6 +61,28 @@ class SQLiteMemory:
             ''', (session_id,))
             lines = [f"{row[0]}: {row[1]}" for row in cursor.fetchall()]
             return "\n".join(lines)
+
+    def set_session_title(self, session_id: str, title: str):
+        """设置或更新会话标题"""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute('''
+                INSERT INTO sessions (session_id, title, created_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(session_id) DO UPDATE SET title=excluded.title
+            ''', (session_id, title, datetime.datetime.now().isoformat()))
+
+    def get_all_sessions(self) -> list:
+        """获取所有历史 Session 列表及标题，按最新对话时间排序"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute('''
+                SELECT h.session_id, MAX(h.timestamp) as last_time, s.title
+                FROM history h
+                LEFT JOIN sessions s ON h.session_id = s.session_id
+                GROUP BY h.session_id
+                ORDER BY last_time DESC
+            ''')
+            # 返回 [{'id': sess_id, 'title': title}]
+            return [{"id": row[0], "title": row[2] or f"Session {row[0][:6]}"} for row in cursor.fetchall()]
 
 
 class VectorMemory:
