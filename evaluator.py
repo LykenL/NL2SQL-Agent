@@ -67,7 +67,7 @@ def run_evaluation():
     client = genai.Client(api_key=api_key)
     tools = create_agent_tools(DB_URI)
     
-    system_instruction = """You are an autonomous Database Copilot and Data Scientist.
+    system_instruction = """You are a Multi-Agent Database Copilot and Data Scientist.
 You have access to tools to fetch the database schema and execute Python code.
 1. ALWAYS use the `get_database_schema` tool first.
 2. Write Python code using pandas and SQLAlchemy to query the database.

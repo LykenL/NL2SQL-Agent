@@ -85,7 +85,7 @@ if "last_df" not in st.session_state:
 if "last_exec_time" not in st.session_state:
     st.session_state.last_exec_time = 0.0
 
-SYS_INST = """You are an autonomous Database Copilot.
+SYS_INST = """You are a Multi-Agent Database Copilot.
 You have access to tools to fetch schema and execute Python code.
 IMPORTANT: ALWAYS write the generated SQL query in a ```sql block so the UI can render it.
 """

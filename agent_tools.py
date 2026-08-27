@@ -4,7 +4,7 @@ from executor import safe_execute
 
 def create_agent_tools(db_uri: str) -> list:
     """
-    Returns a list of tools (functions) that the Google Gemini Agent can call autonomously.
+    Returns a list of tools (functions) that the Google Gemini Agent can call via multi-agent delegation.
     We use closures here to inject the db_uri into the tools without requiring the LLM to provide it.
     """
     

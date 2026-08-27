@@ -1,6 +1,6 @@
 # Cognitive Database Copilot
 
-*An autonomous, LLM-driven Cognitive Database Copilot designed to execute complex data analysis tasks across relational databases. The system seamlessly translates natural language into secure, executable Python/SQL code, evaluates its own execution results, and persists analytical insights across sessions using a custom dual-engine memory architecture.*
+*A Multi-Agent, LLM-driven Cognitive Database Copilot designed to execute complex data analysis tasks across relational databases. The system seamlessly translates natural language into secure, executable Python/SQL code, evaluates its own execution results, and persists analytical insights across sessions using a custom dual-engine memory architecture.*
 
 ## Quick Start
 
@@ -31,7 +31,7 @@ python evaluator.py
 
 ## Technical Architecture
 
-### 1. Autonomous Execution Sandbox (Native Tool Calling)
+### 1. Multi-Agent Execution Sandbox (Native Tool Calling)
 *   **LLM Engine**: Powered by `Google Gemini 3.5 Flash`, utilizing structured Native Tool Calling.
 *   **Agnostic Data Access**: Leveraged `SQLAlchemy` and `Pandas` to support universal connection URIs, allowing the agent to seamlessly query a wide array of SQL dialects (PostgreSQL, MySQL, SQLite) without modifying the codebase.
 *   **Secure `exec()` Sandbox**: Developed a robust local execution environment that intercepts `stdout` and injects variables dynamically. Implemented strict AST/Regex-level defense mechanisms to prevent destructive SQL operations (`DROP`, `DELETE`, `UPDATE`), ensuring 100% read-only compliance.

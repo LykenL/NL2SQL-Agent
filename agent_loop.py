@@ -36,7 +36,7 @@ def main():
     tools = create_agent_tools(args.db_uri)
     
     # 3. Create the System Instruction
-    system_instruction = """You are an autonomous Database Copilot and Data Scientist.
+    system_instruction = """You are a Multi-Agent Database Copilot and Data Scientist.
 You have access to tools to fetch the database schema and execute Python code.
 Whenever you are asked to analyze data:
 1. ALWAYS use the `get_database_schema` tool first to understand the tables.
