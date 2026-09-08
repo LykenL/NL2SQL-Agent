@@ -117,11 +117,26 @@ with st.sidebar:
     st.divider()
     
     with st.expander("Connection Status", expanded=True):
-        st.text_input("Database URI", key="new_uri", value=st.session_state.db_uri)
-        if st.session_state.new_uri != st.session_state.db_uri:
-            st.session_state.db_uri = st.session_state.new_uri
-            reset_chat_session()
-            st.rerun()
+        conn_method = st.radio("Method", ["URL String", "Upload Local File"], horizontal=True, label_visibility="collapsed")
+        
+        if conn_method == "URL String":
+            current_val = st.session_state.db_uri if not st.session_state.db_uri.endswith("uploaded_db.sqlite") else ""
+            new_uri = st.text_input("Database URI", value=current_val)
+            if new_uri and new_uri != st.session_state.db_uri:
+                st.session_state.db_uri = new_uri
+                reset_chat_session()
+                st.rerun()
+        else:
+            uploaded_file = st.file_uploader("Upload SQLite file (.db, .sqlite)", type=["db", "sqlite"])
+            if uploaded_file is not None:
+                with open("uploaded_db.sqlite", "wb") as f:
+                    f.write(uploaded_file.getbuffer())
+                new_uri = "sqlite:///uploaded_db.sqlite"
+                if new_uri != st.session_state.db_uri:
+                    st.session_state.db_uri = new_uri
+                    reset_chat_session()
+                    st.rerun()
+                    
         try:
             engine = create_engine(st.session_state.db_uri)
             insp = inspect(engine)
