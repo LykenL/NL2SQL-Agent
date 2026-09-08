@@ -92,7 +92,7 @@ Whenever you are asked to analyze data:
             messages.append({"role": "user", "content": enriched_input})
             while True:
                 response = client.chat.completions.create(
-                    model="gemma-4-31b-it",
+                    model="gemma4:31b",
                     messages=messages,
                     tools=tools_schema,
                     temperature=0.0

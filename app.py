@@ -110,7 +110,7 @@ if "messages" not in st.session_state:
 
 def generate_title(prompt):
     resp = client.chat.completions.create(
-        model="gemma-4-31b-it",
+        model="gemma4:31b",
         messages=[{"role": "user", "content": f"Summarize this query into a short title (around 7 words, return just the string): {prompt}"}]
     )
     return resp.choices[0].message.content.strip().replace('"', '')
@@ -293,7 +293,7 @@ with col_chat:
                 
                 while True:
                     response = client.chat.completions.create(
-                        model="gemma-4-31b-it",
+                        model="gemma4:31b",
                         messages=st.session_state.messages,
                         tools=tools_schema,
                         temperature=0.0
