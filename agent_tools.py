@@ -31,7 +31,7 @@ def create_agent_tools(db_uri: str) -> list:
         
         # 【黑客技巧】：在大模型接收工具执行结果时，利用“近因效应”狠狠敲打它
         if "❌" not in output:
-            directive = "\n\n[SYSTEM DIRECTIVE]: Execution successful. You MUST include the exact Python code you just ran inside a ```python block in your final explanation to the user. Do not omit the code!"
+            directive = "\n\n[SYSTEM DIRECTIVE]: Execution successful. Keep your final text response extremely concise and DO NOT repeat the raw code in the chat."
             return output + directive
         return output
     

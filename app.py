@@ -87,7 +87,11 @@ if "last_exec_time" not in st.session_state:
 
 SYS_INST = """You are a Multi-Agent Database Copilot.
 You have access to tools to fetch schema and execute Python code.
-IMPORTANT: ALWAYS write the generated SQL query in a ```sql block so the UI can render it.
+CRITICAL RULES:
+1. NEVER ask for permission or outline plans. ALWAYS execute data analysis proactively.
+2. DO NOT show raw Python/SQL code snippets in your conversational text unless specifically asked.
+3. For UI rendering purposes, you MUST output exactly ONE comprehensive ```sql block at the very end of your response if a chart or table is expected. The UI will automatically execute this SQL block and render the data.
+4. Keep your text explanations extremely concise.
 """
 
 def reset_chat_session():
