@@ -17,9 +17,7 @@ st.set_page_config(page_title="Data Copilot Pro", layout="wide", initial_sidebar
 
 st.markdown("""
 <style>
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
+    /* Streamlit UI elements restored */
     
     .stTextArea textarea {
         background-color: #1e1e2e;
