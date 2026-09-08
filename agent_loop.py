@@ -2,7 +2,7 @@ import os
 import sys
 import argparse
 import uuid
-from google import genai
+from openai import OpenAI
 from dotenv import load_dotenv
 
 from agent_tools import create_agent_tools
@@ -30,7 +30,7 @@ def main():
     print(f"🧠 Memory Modules Initialized. Session ID: {session_id}")
     
     # 1. Initialize Client
-    client = genai.Client(api_key=api_key)
+    client = OpenAI(api_key=os.getenv('OLLAMA_API_KEY', 'ollama'), base_url=os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434/v1'))
     
     # 2. Get the tools bound to this specific database
     tools = create_agent_tools(args.db_uri)
@@ -48,15 +48,8 @@ Whenever you are asked to analyze data:
 7. Explain the final result clearly to the user in English.
 """
 
-    # 4. Create the Chat Session (Memory + Function Calling)
-    chat = client.chats.create(
-        model="gemma-4-31b-it",
-        config={
-            "tools": tools,
-            "system_instruction": system_instruction,
-            "temperature": 0.0
-        }
-    )
+    messages = [{"role": "system", "content": system_instruction}]
+    tools_schema, tool_map = create_agent_tools(args.db_uri)
     
     print("\n" + "="*50)
     print("🤖 Cognitive Agent is Ready!")
@@ -91,14 +84,36 @@ Whenever you are asked to analyze data:
                 enriched_input = user_input
                 
             print("⏳ Agent is thinking and working (calling tools in background)...")
+            import json
+            messages.append({"role": "user", "content": enriched_input})
+            while True:
+                response = client.chat.completions.create(
+                    model="gemma-4-31b-it",
+                    messages=messages,
+                    tools=tools_schema,
+                    temperature=0.0
+                )
+                msg = response.choices[0].message
+                msg_dict = {"role": msg.role, "content": msg.content}
+                if msg.tool_calls:
+                    msg_dict["tool_calls"] = [{"id": t.id, "type": t.type, "function": {"name": t.function.name, "arguments": t.function.arguments}} for t in msg.tool_calls]
+                messages.append(msg_dict)
+
+                if msg.tool_calls:
+                    for t in msg.tool_calls:
+                        fname = t.function.name
+                        fargs = json.loads(t.function.arguments)
+                        if fname in tool_map:
+                            res = tool_map[fname](**fargs)
+                        else:
+                            res = "Tool not found"
+                        messages.append({"role": "tool", "tool_call_id": t.id, "name": fname, "content": str(res)})
+                else:
+                    final_text = msg.content or ""
+                    break
             
-            # 发送强化过的请求给大模型
-            response = chat.send_message(enriched_input)
-            
-            # 把原生的一问一答存入 SQLite 短期记忆
-            sqlite_mem.add_message(session_id, "agent", response.text)
-            
-            print(f"\n🤖 Agent: {response.text}\n")
+            sqlite_mem.add_message(session_id, "agent", final_text)
+            print(f"\n🤖 Agent: {final_text}\n")
             
         except KeyboardInterrupt:
             # 即使用户按 Ctrl+C 强退，也会触发静默压缩

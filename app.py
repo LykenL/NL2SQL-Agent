@@ -5,7 +5,7 @@ import json
 import time
 import pandas as pd
 from dotenv import load_dotenv
-from google import genai
+from openai import OpenAI
 from sqlalchemy import create_engine, inspect, text
 
 from agent_tools import create_agent_tools
@@ -52,19 +52,17 @@ api_key = None
 
 # Try loading from Streamlit Cloud Secrets first
 try:
-    if "GEMINI_API_KEY" in st.secrets:
-        api_key = st.secrets["GEMINI_API_KEY"]
+    if "OLLAMA_API_KEY" in st.secrets:
+        api_key = st.secrets["OLLAMA_API_KEY"]
 except Exception:
     pass
 
 # Fallback to local .env file
 if not api_key:
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = os.getenv("OLLAMA_API_KEY", "ollama")
 
-if not api_key:
-    st.error("GEMINI_API_KEY not found.")
-    st.info("💡 **If running locally**: Add it to your `.env` file.\n\n💡 **If on Streamlit Cloud**: Go to `App Settings` -> `Secrets`, and paste: \n\n`GEMINI_API_KEY = \"your_api_key_here\"`")
-    st.stop()
+base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+client = OpenAI(api_key=api_key, base_url=base_url)
 
 @st.cache_resource
 def get_memories():
@@ -95,24 +93,17 @@ CRITICAL RULES:
 """
 
 def reset_chat_session():
-    if "genai_client" not in st.session_state:
-        st.session_state.genai_client = genai.Client(api_key=api_key)
-        
-    st.session_state.chat_session = st.session_state.genai_client.chats.create(
-        model="gemma-4-31b-it",
-        config={"tools": create_agent_tools(st.session_state.db_uri), "system_instruction": SYS_INST, "temperature": 0.0}
-    )
+    st.session_state.messages = [{"role": "system", "content": SYS_INST}]
 
-if "chat_session" not in st.session_state:
+if "messages" not in st.session_state:
     reset_chat_session()
 
 def generate_title(prompt):
-    client = genai.Client(api_key=api_key)
-    resp = client.models.generate_content(
+    resp = client.chat.completions.create(
         model="gemma-4-31b-it",
-        contents=f"Summarize this query into a short title (around 7 words, return just the string): {prompt}"
+        messages=[{"role": "user", "content": f"Summarize this query into a short title (around 7 words, return just the string): {prompt}"}]
     )
-    return resp.text.strip().replace('"', '')
+    return resp.choices[0].message.content.strip().replace('"', '')
 
 # --- 3. Sidebar ---
 with st.sidebar:
@@ -287,13 +278,52 @@ with col_chat:
         start_time = time.time()
         with st.spinner("Processing..."):
             try:
-                resp = st.session_state.chat_session.send_message(final_prompt)
+                st.session_state.messages.append({"role": "user", "content": final_prompt})
+                tools_schema, tool_map = create_agent_tools(st.session_state.db_uri)
+                
+                while True:
+                    response = client.chat.completions.create(
+                        model="gemma-4-31b-it",
+                        messages=st.session_state.messages,
+                        tools=tools_schema,
+                        temperature=0.0
+                    )
+                    
+                    response_message = response.choices[0].message
+                    # convert openai obj to dict for appending
+                    msg_dict = {"role": response_message.role, "content": response_message.content}
+                    if response_message.tool_calls:
+                        msg_dict["tool_calls"] = [{"id": t.id, "type": t.type, "function": {"name": t.function.name, "arguments": t.function.arguments}} for t in response_message.tool_calls]
+                    
+                    st.session_state.messages.append(msg_dict)
+                    
+                    tool_calls = response_message.tool_calls
+                    if tool_calls:
+                        for tool_call in tool_calls:
+                            func_name = tool_call.function.name
+                            func_args = json.loads(tool_call.function.arguments)
+                            
+                            if func_name in tool_map:
+                                result = tool_map[func_name](**func_args)
+                            else:
+                                result = f"Error: Tool {func_name} not found."
+                                
+                            st.session_state.messages.append({
+                                "tool_call_id": tool_call.id,
+                                "role": "tool",
+                                "name": func_name,
+                                "content": str(result)
+                            })
+                    else:
+                        final_text = response_message.content or ""
+                        break
+
                 st.session_state.last_exec_time = time.time() - start_time
-                sqlite_mem.add_message(st.session_state.current_session_id, "model", resp.text)
+                sqlite_mem.add_message(st.session_state.current_session_id, "model", final_text)
                 
                 # Try to extract SQL
-                if "```sql" in resp.text:
-                    sql_block = resp.text.split("```sql")[1].split("```")[0].strip()
+                if "```sql" in final_text:
+                    sql_block = final_text.split("```sql")[1].split("```")[0].strip()
                     st.session_state.last_sql = sql_block
                     # If Execute mode, try to fetch DF directly for the UI Preview
                     if btn_execute:

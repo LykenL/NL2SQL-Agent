@@ -1,6 +1,6 @@
 import os
 import time
-from google import genai
+from openai import OpenAI
 from dotenv import load_dotenv
 
 from memory_manager import SQLiteMemory, VectorMemory
@@ -18,7 +18,7 @@ def compress_session_memory(session_id: str):
         print("[Compression Agent] Warning: GEMINI_API_KEY not found.")
         return
         
-    client = genai.Client(api_key=api_key)
+    client = OpenAI(api_key=os.getenv('OLLAMA_API_KEY', 'ollama'), base_url=os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434/v1'))
     
     sqlite_mem = SQLiteMemory()
     vector_mem = VectorMemory()
@@ -53,11 +53,11 @@ Raw Chat Log:
 """
     
     try:
-        response = client.models.generate_content(
+        response = client.chat.completions.create(
             model="gemma-4-31b-it",
-            contents=prompt,
+            messages=[{"role": "user", "content": prompt}],
         )
-        compressed_memory = response.text
+        compressed_memory = response.choices[0].message.content
         
         print("\n✨ [Compression Agent] Extracted the following Semantic Logic:\n")
         print(compressed_memory)
