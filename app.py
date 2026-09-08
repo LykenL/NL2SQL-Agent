@@ -297,8 +297,8 @@ st.divider()
 # --- 5. Main 3-Column Layout ---
 col_schema, col_chat, col_prev = st.columns([1, 2, 1])
 
-    with col_schema:
-        with st.container(border=True):
+with col_schema:
+    with st.container(border=True):
             st.subheader("Schema Explorer")
             schema_search = st.text_input("Search tables...", key="schema_search")
             
