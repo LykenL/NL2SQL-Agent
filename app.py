@@ -180,7 +180,10 @@ SYS_INST = """You are a Multi-Agent Database Copilot and Expert Data Analyst.
 Your goal is to translate natural language into executable SQL and Python code to extract insights from databases.
 
 ### 🛠 OPERATIONAL GUIDELINES:
-1. **SQL Rendering**: ALWAYS wrap generated SQL queries in a ```sql block for UI rendering.
+SYS_INST = """You are a Multi-Agent Database Copilot.
+You have access to tools to fetch schema and execute Python code.
+IMPORTANT: ALWAYS write the generated SQL query in a ```sql block so the UI can render it.
+"""
 2. **Tool Sequence**: Call `get_database_schema` FIRST for any new table or unknown query to ensure column names are correct.
 3. **Analysis Strategy**: Prefer Python (Pandas) over raw SQL for complex analysis, data cleaning, and EDA. Fetch data via SQL, then analyze it in Python.
 
@@ -200,7 +203,7 @@ def reset_chat_session():
         st.session_state.genai_client = genai.Client(api_key=api_key)
         
     st.session_state.chat_session = st.session_state.genai_client.chats.create(
-        model="gemini-1.5-flash",
+        model="gemini-3.5-flash-lite",
         config={"tools": create_agent_tools(st.session_state.db_uri), "system_instruction": SYS_INST, "temperature": 0.0}
     )
 
