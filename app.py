@@ -290,12 +290,18 @@ with col_chat:
             try:
                 st.session_state.messages.append({"role": "user", "content": final_prompt})
                 tools_schema, tool_map = create_agent_tools(st.session_state.db_uri)
-                
-                max_iterations = 5
+                max_iterations = 7
                 iteration = 0
                 
                 while iteration < max_iterations:
                     iteration += 1
+                    
+                    if iteration == max_iterations - 1:
+                        st.session_state.messages.append({
+                            "role": "user",
+                            "content": "CRITICAL WARNING: You have reached the maximum allowed tool calls. You have ONE turn left. You MUST stop using tools immediately and summarize your findings to the user based on the context above. Do NOT call any more tools."
+                        })
+                        
                     response = client.chat.completions.create(
                         model="gemma4:31b-cloud",
                         messages=st.session_state.messages,
@@ -336,7 +342,7 @@ with col_chat:
                         break
                 
                 if iteration >= max_iterations:
-                    final_text = (response_message.content or "") + "\n\n⚠️ **System Warning:** Max tool execution limit reached to prevent infinite loops."
+                    final_text = (response_message.content or "") + "\n\n⚠️ **System Warning:** Hard execution limit reached."
 
                 st.session_state.last_exec_time = time.time() - start_time
                 sqlite_mem.add_message(st.session_state.current_session_id, "model", final_text)

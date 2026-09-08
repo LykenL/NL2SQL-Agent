@@ -90,10 +90,17 @@ Whenever you are asked to analyze data:
             print("⏳ Agent is thinking and working (calling tools in background)...")
             import json
             messages.append({"role": "user", "content": enriched_input})
-            max_iterations = 5
+            max_iterations = 7
             iteration = 0
             while iteration < max_iterations:
                 iteration += 1
+                
+                if iteration == max_iterations - 1:
+                    messages.append({
+                        "role": "user",
+                        "content": "CRITICAL WARNING: You have reached the maximum allowed tool calls. You have ONE turn left. You MUST stop using tools immediately and summarize your findings to the user based on the context above. Do NOT call any more tools."
+                    })
+                    
                 response = client.chat.completions.create(
                     model="gemma4:31b-cloud",
                     messages=messages,
@@ -123,7 +130,7 @@ Whenever you are asked to analyze data:
                     break
             
             if iteration >= max_iterations:
-                final_text = (msg.content or "") + "\n\n⚠️ **System Warning:** Max tool execution limit reached to prevent infinite loops."
+                final_text = (msg.content or "") + "\n\n⚠️ **System Warning:** Hard execution limit reached."
             
             sqlite_mem.add_message(session_id, "agent", final_text)
             print(f"\n🤖 Agent: {final_text}\n")
