@@ -111,6 +111,34 @@ st.markdown("""
 load_dotenv()
 api_key = None
 
+def resolve_db_uri(uri: str) -> str:
+    """
+    Resolves a database URI to a valid SQLAlchemy connection string.
+    Handles relative paths, absolute paths, and raw file paths.
+    """
+    if not uri:
+        return ""
+    
+    # 1. Handle raw absolute paths (no protocol)
+    if uri.startswith("/") and not uri.startswith("sqlite"):
+        return f"sqlite:////{uri}"
+    
+    # 2. Handle SQLite URIs
+    if uri.startswith("sqlite"):
+        # Separate protocol from path
+        # sqlite:///path (relative) or sqlite:////path (absolute)
+        path = uri.replace("sqlite:///", "")
+        if path.startswith("/"):
+            # Already absolute
+            return uri
+        
+        # Resolve relative path against app.py directory
+        app_dir = os.path.dirname(os.path.abspath(__file__))
+        abs_path = os.path.join(app_dir, path)
+        return f"sqlite:////{abs_path}"
+    
+    return uri
+
 # Try loading from Streamlit Cloud Secrets first
 try:
     if "GEMINI_API_KEY" in st.secrets:
@@ -184,18 +212,38 @@ with st.sidebar:
     
     with st.expander("Connection Status", expanded=True):
         st.text_input("Database URI", key="new_uri", value=st.session_state.db_uri)
+        
+        # Resolve URI for internal use
+        resolved_uri = resolve_db_uri(st.session_state.new_uri)
+        
         if st.session_state.new_uri != st.session_state.db_uri:
             st.session_state.db_uri = st.session_state.new_uri
             reset_chat_session()
             st.rerun()
+            
         try:
-            engine = create_engine(st.session_state.db_uri)
-            insp = inspect(engine)
-            tables = insp.get_table_names()
-            st.success(f"Connected ({len(tables)} tables)")
-        except:
-            st.error("Disconnected")
+            # Check if file exists on disk first
+            if resolved_uri.startswith("sqlite:////"):
+                db_file = resolved_uri.replace("sqlite:////", "")
+                if not os.path.exists(db_file):
+                    st.error(f"File not found: {db_file}")
+                    tables = []
+                else:
+                    engine = create_engine(resolved_uri)
+                    insp = inspect(engine)
+                    tables = insp.get_table_names()
+                    st.success(f"Connected ({len(tables)} tables)")
+            else:
+                # Fallback for non-sqlite or weird URIs
+                engine = create_engine(resolved_uri)
+                insp = inspect(engine)
+                tables = insp.get_table_names()
+                st.success(f"Connected ({len(tables)} tables)")
+        except Exception as e:
+            st.error(f"Connection Error: {e}")
             tables = []
+            
+        st.caption(f"CWD: {os.getcwd()}")
 
     st.divider()
     
@@ -249,15 +297,17 @@ st.divider()
 # --- 5. Main 3-Column Layout ---
 col_schema, col_chat, col_prev = st.columns([1, 2, 1])
 
-with col_schema:
-    with st.container(border=True):
-        st.subheader("Schema Explorer")
-        schema_search = st.text_input("Search tables...", key="schema_search")
-        
-        try:
-            engine = create_engine(st.session_state.db_uri)
-            insp = inspect(engine)
-            for t in insp.get_table_names():
+    with col_schema:
+        with st.container(border=True):
+            st.subheader("Schema Explorer")
+            schema_search = st.text_input("Search tables...", key="schema_search")
+            
+            try:
+                resolved_uri = resolve_db_uri(st.session_state.db_uri)
+                engine = create_engine(resolved_uri)
+                insp = inspect(engine)
+                for t in insp.get_table_names():
+
                 if schema_search and schema_search.lower() not in t.lower(): continue
                 
                 row_count = 0
@@ -359,7 +409,8 @@ with col_chat:
                         st.session_state.last_sql = sql_block
                         # If Execute mode, try to fetch DF directly for the UI Preview
                         if btn_execute:
-                            engine = create_engine(st.session_state.db_uri)
+                            resolved_uri = resolve_db_uri(st.session_state.db_uri)
+                            engine = create_engine(resolved_uri)
                             st.session_state.last_df = pd.read_sql(sql_block, engine)
                 except Exception as e:
                     st.error(f"Error: {e}")
