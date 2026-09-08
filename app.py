@@ -1,4 +1,5 @@
 import streamlit as st
+import pandas as pd
 import uuid
 
 SYS_INST = """You are a Multi-Agent Database Copilot.
