@@ -90,7 +90,7 @@ You have access to tools to fetch the database schema and execute Python code.
         
         # 每次测试都新建一个干净的 chat session，防止之前的测试污染上下文
         chat = client.chats.create(
-            model="gemini-3.5-flash-lite",
+            model="gemma-4-31b",
             config={
                 "tools": tools,
                 "system_instruction": system_instruction,
