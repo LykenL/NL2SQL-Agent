@@ -114,16 +114,22 @@ api_key = None
 def resolve_db_uri(uri: str) -> str:
     """
     Resolves a database URI to a valid SQLAlchemy connection string.
-    Handles relative paths, absolute paths, and raw file paths.
+    Handles relative paths, absolute paths, raw file paths, and remote URIs.
     """
     if not uri:
         return ""
     
-    # 1. Handle raw absolute paths (no protocol)
+    # 1. Handle Remote Databases (Postgres, MySQL, etc.)
+    # These should be passed directly to SQLAlchemy
+    remote_protocols = ("postgresql://", "mysql://", "mssql://", "oracle://", "mariadb://")
+    if any(uri.startswith(proto) for proto in remote_protocols):
+        return uri
+
+    # 2. Handle raw absolute paths (no protocol)
     if uri.startswith("/") and not uri.startswith("sqlite"):
         return f"sqlite:////{uri}"
     
-    # 2. Handle SQLite URIs
+    # 3. Handle SQLite URIs
     if uri.startswith("sqlite"):
         # Separate protocol from path
         # sqlite:///path (relative) or sqlite:////path (absolute)
@@ -210,19 +216,36 @@ with st.sidebar:
     """, unsafe_allow_html=True)
     st.divider()
     
-    with st.expander("Connection Status", expanded=True):
-        st.text_input("Database URI", key="new_uri", value=st.session_state.db_uri)
+    with st.expander("Connection Settings", expanded=True):
+        conn_mode = st.radio("Connection Mode", ["Remote/URI", "Upload SQLite"], horizontal=True)
+        
+        if conn_mode == "Remote/URI":
+            st.text_input("Database URI", key="new_uri", value=st.session_state.db_uri)
+        else:
+            uploaded_file = st.file_uploader("Upload .sqlite / .db file", type=["sqlite", "db", "sqlite3"])
+            if uploaded_file:
+                # Save uploaded file to a temporary location
+                temp_path = os.path.join("/tmp", uploaded_file.name)
+                with open(temp_path, "wb") as f:
+                    f.write(uploaded_file.getbuffer())
+                
+                # Update URI to point to the uploaded file
+                new_uri = f"sqlite:////{temp_path}"
+                if st.session_state.db_uri != new_uri:
+                    st.session_state.db_uri = new_uri
+                    reset_chat_session()
+                    st.rerun()
         
         # Resolve URI for internal use
-        resolved_uri = resolve_db_uri(st.session_state.new_uri)
+        resolved_uri = resolve_db_uri(st.session_state.db_uri)
         
-        if st.session_state.new_uri != st.session_state.db_uri:
+        if "new_uri" in locals() and st.session_state.new_uri != st.session_state.db_uri:
             st.session_state.db_uri = st.session_state.new_uri
             reset_chat_session()
             st.rerun()
             
         try:
-            # Check if file exists on disk first
+            # Check if file exists on disk first (only for SQLite)
             if resolved_uri.startswith("sqlite:////"):
                 db_file = resolved_uri.replace("sqlite:////", "")
                 if not os.path.exists(db_file):
@@ -234,7 +257,7 @@ with st.sidebar:
                     tables = insp.get_table_names()
                     st.success(f"Connected ({len(tables)} tables)")
             else:
-                # Fallback for non-sqlite or weird URIs
+                # Remote databases or other URIs
                 engine = create_engine(resolved_uri)
                 insp = inspect(engine)
                 tables = insp.get_table_names()
