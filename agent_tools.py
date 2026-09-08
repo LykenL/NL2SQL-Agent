@@ -8,15 +8,14 @@ def create_agent_tools(db_uri: str) -> list:
     We use closures here to inject the db_uri into the tools without requiring the LLM to provide it.
     """
     
-    def get_database_schema() -> str:
+    def get_database_schema(force_refresh: bool = False) -> str:
         """
         Retrieves the complete JSON schema of the target relational database.
         Call this tool FIRST whenever you are asked to analyze data, so you know what tables and columns exist.
+        Set force_refresh=True to bypass the schema cache and re-scan the database.
         """
-        print("\n[Tool execution] get_database_schema called. Pacing for rate limits (4s)...")
-        time.sleep(4)
-        return extract_db_schema(db_uri)
-        
+        return extract_db_schema(db_uri, force_refresh=force_refresh)
+    
     def execute_python_code(code_string: str) -> str:
         """
         Executes Python code locally and returns the standard output (print statements) or error tracebacks.
@@ -35,6 +34,6 @@ def create_agent_tools(db_uri: str) -> list:
             directive = "\n\n[SYSTEM DIRECTIVE]: Execution successful. You MUST include the exact Python code you just ran inside a ```python block in your final explanation to the user. Do not omit the code!"
             return output + directive
         return output
-        
+    
     # Return the functions themselves as tools
     return [get_database_schema, execute_python_code]
