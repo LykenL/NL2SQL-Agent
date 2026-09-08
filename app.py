@@ -447,6 +447,11 @@ with col_chat:
                             resolved_uri = resolve_db_uri(st.session_state.db_uri)
                             engine = create_engine(resolved_uri)
                             st.session_state.last_df = pd.read_sql(sql_block, engine)
+                    elif btn_execute:
+                        # If no SQL block in final response, but the agent used tools, 
+                        # we should keep the last_df from the tool execution.
+                        # The current setup does this naturally as last_df persists in session_state.
+                        pass
                 except Exception as e:
                     st.error(f"Error: {e}")
                     
