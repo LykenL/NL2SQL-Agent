@@ -266,8 +266,6 @@ with st.sidebar:
             st.error(f"Connection Error: {e}")
             tables = []
             
-        st.caption(f"CWD: {os.getcwd()}")
-
     st.divider()
     
     col1, col2 = st.columns(2)
