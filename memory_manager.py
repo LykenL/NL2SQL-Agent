@@ -92,6 +92,12 @@ class SQLiteMemory:
                 res.append({"id": sess_id, "title": title})
             return res
 
+    def delete_session(self, session_id: str):
+        """删除特定 Session 的所有记录及标题"""
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute('DELETE FROM history WHERE session_id = ?', (session_id,))
+            conn.execute('DELETE FROM sessions WHERE session_id = ?', (session_id,))
+
 
 class VectorMemory:
     """
