@@ -25,11 +25,31 @@ python agent_loop.py sqlite:///examples/company.db
 4. **Run the Automated Benchmarks**
 ```bash
 python evaluator.py
-```
+28: ```
+29: 
+30: ## Connecting to Custom Databases
+31: 
+32: The Copilot uses SQLAlchemy URIs to connect to databases. For SQLite databases, use the `sqlite:///` prefix.
+33: 
+34: ### 1. Using the Web UI
+35: Launch the app (`streamlit run app.py`) and enter the connection string in the **Database URI** field in the sidebar.
+36: 
+37: ### 2. Using the CLI
+38: Pass the URI as a command-line argument to `agent_loop.py`:
+39: ```bash
+40: python agent_loop.py sqlite:///path/to/your/database.db
+41: ```
+42: 
+43: ### Example: Connecting to Chinook Database
+44: To connect to the Chinook sample database located at `/Users/lykenl/Documents/local agent/data_copilot/chroma_db/Chinook_Sqlite.sqlite`, use the following absolute URI (note the four slashes `sqlite:////` for absolute paths on Unix systems):
+45: ```text
+46: sqlite:////Users/lykenl/Documents/local agent/data_copilot/chroma_db/Chinook_Sqlite.sqlite
+47: ```
+48: 
+49: ---
+50: 
+51: ## Technical Architecture
 
----
-
-## Technical Architecture
 
 ### 1. Multi-Agent Execution Sandbox (Native Tool Calling)
 *   **LLM Engine**: Powered by `Google Gemini 3.5 Flash`, utilizing structured Native Tool Calling.
