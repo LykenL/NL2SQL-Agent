@@ -418,7 +418,13 @@ with tab_chart:
                             date_cols.append(col)
                             cat_cols.remove(col)
 
-                if date_cols and num_cols:
+                if len(df) == 1 and num_cols:
+                    # Single row of aggregated metrics (e.g., total customers, total tracks)
+                    melted_df = df[num_cols].melt(var_name="Metric", value_name="Value")
+                    fig = px.bar(melted_df, x="Metric", y="Value", title="📊 Aggregated Metrics", color="Metric", text="Value")
+                    fig.update_traces(texttemplate='%{text:.2s}', textposition='outside')
+                    st.plotly_chart(fig, use_container_width=True)
+                elif date_cols and num_cols:
                     fig = px.line(df, x=date_cols[0], y=num_cols, title="📈 Time Series Trend")
                     fig.update_xaxes(rangeslider_visible=True)
                     st.plotly_chart(fig, use_container_width=True)
