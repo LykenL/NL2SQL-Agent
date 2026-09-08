@@ -51,17 +51,19 @@ load_dotenv()
 api_key = None
 
 # Try loading from Streamlit Cloud Secrets first
+base_url = None
 try:
+    if "OLLAMA_BASE_URL" in st.secrets:
+        base_url = st.secrets["OLLAMA_BASE_URL"]
     if "OLLAMA_API_KEY" in st.secrets:
         api_key = st.secrets["OLLAMA_API_KEY"]
 except Exception:
     pass
 
-# Fallback to local .env file
 if not api_key:
     api_key = os.getenv("OLLAMA_API_KEY", "ollama")
-
-base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+if not base_url:
+    base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
 client = OpenAI(
     api_key=api_key, 
     base_url=base_url,
