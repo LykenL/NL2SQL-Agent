@@ -5,6 +5,7 @@ import json
 import time
 import pandas as pd
 import plotly.express as px
+import re
 from dotenv import load_dotenv
 from google import genai
 from sqlalchemy import create_engine, inspect, text
@@ -400,15 +401,23 @@ with col_chat:
             st.session_state.prompt_text = "Join table A and B and find "
             st.rerun()
         
-        # Render Chat History
-        history_messages = sqlite_mem.get_recent_context(st.session_state.current_session_id, limit=20)
-        chat_container = st.container(height=300)
-        with chat_container:
-            if not history_messages:
-                st.info("Start a new conversation below.")
-            for msg in history_messages:
-                role = "user" if msg["role"] == "user" else "assistant"
-                st.chat_message(role).markdown(msg["content"])
+    # Render Chat History
+    history_messages = sqlite_mem.get_recent_context(st.session_state.current_session_id, limit=20)
+    chat_container = st.container(height=300)
+    with chat_container:
+        if not history_messages:
+            st.info("Start a new conversation below.")
+        for msg in history_messages:
+            role = "user" if msg["role"] == "user" else "assistant"
+            content = msg["content"]
+            
+            # Hide Python code blocks from the user's chat view to keep it clean
+            # but let the agent continue to use them.
+            import re
+            content = re.sub(r"```python.*?```", "[Executing analysis...]", content, flags=re.DOTALL)
+            
+            st.chat_message(role).markdown(content)
+
         
         # Input Form
         with st.form("chat_form"):

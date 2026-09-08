@@ -39,6 +39,13 @@ def safe_execute(code_string: str, custom_globals: dict = None) -> str:
         # Redirect standard output (print statements) into our buffer
         with contextlib.redirect_stdout(output_buffer):
             exec(code_string, exec_globals)
+        
+        # CAPTURE DATAFRAMES: Look for any pandas DataFrames created in the global scope
+        # and automatically print them so they appear in the tool output.
+        for var_name, var_val in exec_globals.items():
+            if not var_name.startswith("__") and isinstance(var_val, pd.DataFrame):
+                output_buffer.write(f"\n\n[DataFrame: {var_name}]\n{var_val.to_string()}\n")
+        
         return output_buffer.getvalue()
     except Exception as e:
         return f"❌ Execution Error: {str(e)}"
