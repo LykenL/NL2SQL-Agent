@@ -58,7 +58,7 @@ Raw Chat Log:
     
     try:
         response = client.chat.completions.create(
-            model="gemma4:31b",
+            model="gemma4:31b-cloud",
             messages=[{"role": "user", "content": prompt}],
         )
         compressed_memory = response.choices[0].message.content
