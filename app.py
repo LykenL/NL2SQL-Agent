@@ -62,7 +62,11 @@ if not api_key:
     api_key = os.getenv("OLLAMA_API_KEY", "ollama")
 
 base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
-client = OpenAI(api_key=api_key, base_url=base_url)
+client = OpenAI(
+    api_key=api_key, 
+    base_url=base_url,
+    default_headers={"ngrok-skip-browser-warning": "true"}
+)
 
 @st.cache_resource
 def get_memories():

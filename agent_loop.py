@@ -30,7 +30,11 @@ def main():
     print(f"🧠 Memory Modules Initialized. Session ID: {session_id}")
     
     # 1. Initialize Client
-    client = OpenAI(api_key=os.getenv('OLLAMA_API_KEY', 'ollama'), base_url=os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434/v1'))
+    client = OpenAI(
+        api_key=os.getenv('OLLAMA_API_KEY', 'ollama'), 
+        base_url=os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434/v1'),
+        default_headers={"ngrok-skip-browser-warning": "true"}
+    )
     
     # 2. Get the tools bound to this specific database
     tools = create_agent_tools(args.db_uri)
