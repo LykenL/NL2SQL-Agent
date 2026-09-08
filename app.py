@@ -220,7 +220,12 @@ with st.sidebar:
         conn_mode = st.radio("Connection Mode", ["Remote/URI", "Upload SQLite"], horizontal=True)
         
         if conn_mode == "Remote/URI":
-            st.text_input("Database URI", key="new_uri", value=st.session_state.db_uri)
+            # Use a key that doesn't conflict with local variables
+            uri_input = st.text_input("Database URI", key="db_uri_input", value=st.session_state.db_uri)
+            if uri_input != st.session_state.db_uri:
+                st.session_state.db_uri = uri_input
+                reset_chat_session()
+                st.rerun()
         else:
             uploaded_file = st.file_uploader("Upload .sqlite / .db file", type=["sqlite", "db", "sqlite3"])
             if uploaded_file:
@@ -239,11 +244,6 @@ with st.sidebar:
         # Resolve URI for internal use
         resolved_uri = resolve_db_uri(st.session_state.db_uri)
         
-        if "new_uri" in locals() and st.session_state.new_uri != st.session_state.db_uri:
-            st.session_state.db_uri = st.session_state.new_uri
-            reset_chat_session()
-            st.rerun()
-            
         try:
             # Check if file exists on disk first (only for SQLite)
             if resolved_uri.startswith("sqlite:////"):
