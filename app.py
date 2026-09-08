@@ -412,9 +412,9 @@ with col_chat:
             content = msg["content"]
             
             # Hide Python code blocks from the user's chat view to keep it clean
-            # but let the agent continue to use them.
-            import re
-            content = re.sub(r"```python.*?```", "[Executing analysis...]", content, flags=re.DOTALL)
+            # Ensure content is a string before applying regex
+            if isinstance(content, str):
+                content = re.sub(r"```python.*?```", "[Executing analysis...]", content, flags=re.DOTALL)
             
             st.chat_message(role).markdown(content)
 
