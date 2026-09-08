@@ -95,7 +95,7 @@ def reset_chat_session():
         st.session_state.genai_client = genai.Client(api_key=api_key)
         
     st.session_state.chat_session = st.session_state.genai_client.chats.create(
-        model="gemma-4-31b",
+        model="gemma-4-31b-it",
         config={"tools": create_agent_tools(st.session_state.db_uri), "system_instruction": SYS_INST, "temperature": 0.0}
     )
 
@@ -105,7 +105,7 @@ if "chat_session" not in st.session_state:
 def generate_title(prompt):
     client = genai.Client(api_key=api_key)
     resp = client.models.generate_content(
-        model="gemma-4-31b",
+        model="gemma-4-31b-it",
         contents=f"Summarize this query into a short title (around 7 words, return just the string): {prompt}"
     )
     return resp.text.strip().replace('"', '')

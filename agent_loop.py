@@ -50,7 +50,7 @@ Whenever you are asked to analyze data:
 
     # 4. Create the Chat Session (Memory + Function Calling)
     chat = client.chats.create(
-        model="gemma-4-31b",
+        model="gemma-4-31b-it",
         config={
             "tools": tools,
             "system_instruction": system_instruction,

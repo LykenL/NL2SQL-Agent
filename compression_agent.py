@@ -54,7 +54,7 @@ Raw Chat Log:
     
     try:
         response = client.models.generate_content(
-            model="gemma-4-31b",
+            model="gemma-4-31b-it",
             contents=prompt,
         )
         compressed_memory = response.text
