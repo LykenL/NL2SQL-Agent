@@ -299,15 +299,14 @@ col_schema, col_chat, col_prev = st.columns([1, 2, 1])
 
 with col_schema:
     with st.container(border=True):
-            st.subheader("Schema Explorer")
-            schema_search = st.text_input("Search tables...", key="schema_search")
-            
-            try:
-                resolved_uri = resolve_db_uri(st.session_state.db_uri)
-                engine = create_engine(resolved_uri)
-                insp = inspect(engine)
-                for t in insp.get_table_names():
-
+        st.subheader("Schema Explorer")
+        schema_search = st.text_input("Search tables...", key="schema_search")
+        
+        try:
+            resolved_uri = resolve_db_uri(st.session_state.db_uri)
+            engine = create_engine(resolved_uri)
+            insp = inspect(engine)
+            for t in insp.get_table_names():
                 if schema_search and schema_search.lower() not in t.lower(): continue
                 
                 row_count = 0
@@ -347,6 +346,7 @@ with col_schema:
                                 st.rerun()
         except Exception as e:
             st.error("Cannot load schema.")
+
 
 
 with col_chat:
