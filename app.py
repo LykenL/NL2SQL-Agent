@@ -64,6 +64,12 @@ if not api_key:
     api_key = os.getenv("OLLAMA_API_KEY", "ollama")
 if not base_url:
     base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+
+# Auto-append /v1 if missing
+base_url = base_url.rstrip("/")
+if not base_url.endswith("/v1"):
+    base_url += "/v1"
+
 client = OpenAI(
     api_key=api_key, 
     base_url=base_url,
@@ -336,7 +342,9 @@ with col_chat:
                         engine = create_engine(st.session_state.db_uri)
                         st.session_state.last_df = pd.read_sql(sql_block, engine)
             except Exception as e:
-                st.error(f"Error: {e}")
+                import traceback
+                st.error(f"❌ Connection Failed! Targeting: {client.base_url}")
+                st.code(traceback.format_exc(), language="python")
                 
         if 'resp' in locals():
             st.rerun()
