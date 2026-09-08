@@ -93,13 +93,11 @@ if "last_df" not in st.session_state:
 if "last_exec_time" not in st.session_state:
     st.session_state.last_exec_time = 0.0
 
-SYS_INST = """You are a Multi-Agent Database Copilot.
-You have access to tools to fetch schema and execute Python code.
-CRITICAL RULES:
-1. NEVER ask for permission or outline plans. ALWAYS execute data analysis proactively.
-2. DO NOT show raw Python/SQL code snippets in your conversational text unless specifically asked.
-3. For UI rendering purposes, you MUST output exactly ONE comprehensive ```sql block at the very end of your response if a chart or table is expected. The UI will automatically execute this SQL block and render the data.
-4. Keep your text explanations extremely concise.
+SYS_INST = """You are an Enterprise Data Intelligence Copilot.
+1. Use tools to understand the database schema and execute Python code for detailed exploratory data analysis (EDA).
+2. NEVER ask for permission or outline plans. Proactively execute your analysis.
+3. Once your analysis is complete, you MUST summarize your findings to the user with bold metrics and actionable insights in a professional tone.
+4. In your final text response, you MUST also output EXACTLY ONE ```sql markdown block containing the primary query that reflects your findings, so the frontend can render it.
 """
 
 def reset_chat_session():
@@ -345,16 +343,28 @@ with col_chat:
                     final_text = (response_message.content or "") + "\n\n⚠️ **System Warning:** Hard execution limit reached."
 
                 st.session_state.last_exec_time = time.time() - start_time
-                sqlite_mem.add_message(st.session_state.current_session_id, "model", final_text)
-                
-                # Try to extract SQL
+                # Try to extract SQL and remove it from the chat text
                 if "```sql" in final_text:
-                    sql_block = final_text.split("```sql")[1].split("```")[0].strip()
+                    parts = final_text.split("```sql", 1)
+                    before_code = parts[0]
+                    code_and_after = parts[1]
+                    if "```" in code_and_after:
+                        sql_block = code_and_after.split("```", 1)[0].strip()
+                        after_code = code_and_after.split("```", 1)[1]
+                    else:
+                        sql_block = code_and_after.strip()
+                        after_code = ""
+                        
                     st.session_state.last_sql = sql_block
+                    # Clean up the final text that goes into the chat bubble
+                    final_text = (before_code + after_code).strip()
+                    
                     # If Execute mode, try to fetch DF directly for the UI Preview
                     if btn_execute:
                         engine = create_engine(st.session_state.db_uri)
                         st.session_state.last_df = pd.read_sql(sql_block, engine)
+                
+                sqlite_mem.add_message(st.session_state.current_session_id, "model", final_text)
             except Exception as e:
                 import traceback
                 st.error(f"❌ Connection Failed! Targeting: {client.base_url}")
@@ -392,9 +402,45 @@ with tab_table:
 with tab_chart:
     if not st.session_state.last_df.empty:
         try:
-            st.bar_chart(st.session_state.last_df)
-        except:
-            st.error("Could not automatically render chart.")
+            import plotly.io as pio
+            import plotly.express as px
+            pio.templates.default = "plotly_dark"
+            df = st.session_state.last_df
+            if len(df.columns) >= 2:
+                num_cols = df.select_dtypes(include=['number']).columns.tolist()
+                cat_cols = df.select_dtypes(exclude=['number']).columns.tolist()
+                date_cols = df.select_dtypes(include=['datetime', 'datetimetz']).columns.tolist()
+                
+                # Fallback heuristic: check if any cat_col looks like a date
+                if not date_cols and cat_cols:
+                    for col in cat_cols:
+                        if df[col].astype(str).str.match(r'^\d{4}-\d{2}-\d{2}').any():
+                            date_cols.append(col)
+                            cat_cols.remove(col)
+
+                if date_cols and num_cols:
+                    fig = px.line(df, x=date_cols[0], y=num_cols, title="📈 Time Series Trend")
+                    fig.update_xaxes(rangeslider_visible=True)
+                    st.plotly_chart(fig, use_container_width=True)
+                elif cat_cols and num_cols:
+                    cat_col = cat_cols[0]
+                    num_col = num_cols[0]
+                    unique_cats = df[cat_col].nunique()
+                    if unique_cats <= 10:
+                        fig = px.pie(df, names=cat_col, values=num_col, title="🍩 Category Breakdown", hole=0.4)
+                    else:
+                        sorted_df = df.sort_values(by=num_col, ascending=False).head(20)
+                        fig = px.bar(sorted_df, x=cat_col, y=num_col, title="📊 Top 20 Category Ranking", color=num_col, color_continuous_scale="Viridis")
+                    st.plotly_chart(fig, use_container_width=True)
+                elif len(num_cols) >= 2:
+                    fig = px.scatter(df, x=num_cols[0], y=num_cols[1], title="🔍 Correlation Scatter", color=num_cols[1], color_continuous_scale="Plasma")
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.line_chart(df)
+            else:
+                st.line_chart(df)
+        except Exception as e:
+            st.error(f"Could not automatically render chart: {e}")
 
 with tab_sql:
     st.code(st.session_state.last_sql, language="sql")
