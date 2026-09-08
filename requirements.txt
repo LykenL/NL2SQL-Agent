@@ -4,3 +4,5 @@ python-dotenv
 sqlalchemy>=2.0.0
 chromadb
 streamlit
+plotly
+

@@ -4,6 +4,7 @@ import uuid
 import json
 import time
 import pandas as pd
+import plotly.express as px
 from dotenv import load_dotenv
 from google import genai
 from sqlalchemy import create_engine, inspect, text
@@ -21,15 +22,36 @@ st.markdown("""
     footer {visibility: hidden;}
     header {visibility: hidden;}
     
-    .stTextArea textarea {
-        background-color: #1e1e2e;
-        color: #cdd6f4;
+    /* Global Theme Overrides */
+    .stApp {
+        background-color: #0f0f1a;
+    }
+
+    /* Card-like Containers */
+    .custom-card {
+        background-color: #1a1a2e;
         border: 1px solid #313244;
-        border-radius: 8px;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    }
+
+    .stTextArea textarea {
+        background-color: #1e1e2e !important;
+        color: #cdd6f4 !important;
+        border: 1px solid #313244 !important;
+        border-radius: 8px !important;
     }
     
     .stButton>button {
-        border-radius: 6px;
+        border-radius: 8px;
+        transition: all 0.2s ease;
+    }
+    
+    .stButton>button:hover {
+        border-color: #89b4fa;
+        box-shadow: 0 0 8px rgba(137, 180, 250, 0.3);
     }
     
     /* Syntax highlighting tags */
@@ -38,10 +60,49 @@ st.markdown("""
     .tag-pk { color: #f9e2af; font-weight: bold; font-size: 0.8em; margin-left: 5px; }
     .tag-fk { color: #f38ba8; font-weight: bold; font-size: 0.8em; margin-left: 5px; }
     
-    /* Metric Cards */
-    div[data-testid="stMetricValue"] {
-        font-size: 28px;
-        color: #4CAF50;
+    /* Custom Metric Cards */
+    .metric-container {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 20px;
+    }
+    .metric-card {
+        background: linear-gradient(135deg, #1e1e2e 0%, #11111b 100%);
+        border: 1px solid #313244;
+        border-radius: 12px;
+        padding: 15px;
+        flex: 1;
+        text-align: center;
+    }
+    .metric-label {
+        color: #a6adc8;
+        font-size: 0.9em;
+        margin-bottom: 5px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    .metric-value {
+        color: #89b4fa;
+        font-size: 24px;
+        font-weight: bold;
+    }
+
+    /* Status Indicator */
+    .status-indicator {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        margin-right: 8px;
+        background-color: #a6e3a1;
+        box-shadow: 0 0 8px #a6e3a1;
+        animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.4; }
+        100% { opacity: 1; }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -112,8 +173,13 @@ def generate_title(prompt):
 
 # --- 3. Sidebar ---
 with st.sidebar:
-    st.markdown("<div class='ide-title'>Data Copilot</div>", unsafe_allow_html=True)
-    st.caption("v2.0 Cognitive IDE")
+    st.markdown("""
+        <div style='display: flex; align-items: center; gap: 10px; margin-bottom: 5px;'>
+            <div class='status-indicator'></div>
+            <div style='font-size: 1.5em; font-weight: bold; color: #cdd6f4;'>Data Copilot</div>
+        </div>
+        <div style='color: #a6adc8; font-size: 0.8em; margin-bottom: 20px;'>v2.0 Cognitive IDE</div>
+    """, unsafe_allow_html=True)
     st.divider()
     
     with st.expander("Connection Status", expanded=True):
@@ -160,10 +226,23 @@ with st.sidebar:
                 st.rerun()
 
 # --- 4. Top Info Bar ---
-col_m1, col_m2, col_m3 = st.columns(3)
-col_m1.metric("Scanned Tables", len(tables) if 'tables' in locals() else 0)
-col_m2.metric("Last Exec Time", f"{st.session_state.last_exec_time:.2f}s")
-col_m3.metric("Rows Returned", len(st.session_state.last_df))
+metrics_html = f"""
+<div class='metric-container'>
+    <div class='metric-card'>
+        <div class='metric-label'>Scanned Tables</div>
+        <div class='metric-value'>{len(tables) if 'tables' in locals() else 0}</div>
+    </div>
+    <div class='metric-card'>
+        <div class='metric-label'>Last Exec Time</div>
+        <div class='metric-value'>{st.session_state.last_exec_time:.2f}s</div>
+    </div>
+    <div class='metric-card'>
+        <div class='metric-label'>Rows Returned</div>
+        <div class='metric-value'>{len(st.session_state.last_df)}</div>
+    </div>
+</div>
+"""
+st.markdown(metrics_html, unsafe_allow_html=True)
 
 st.divider()
 
@@ -171,132 +250,135 @@ st.divider()
 col_schema, col_chat, col_prev = st.columns([1, 2, 1])
 
 with col_schema:
-    st.subheader("Schema Explorer")
-    schema_search = st.text_input("Search tables...", key="schema_search")
-    
-    try:
-        engine = create_engine(st.session_state.db_uri)
-        insp = inspect(engine)
-        for t in insp.get_table_names():
-            if schema_search and schema_search.lower() not in t.lower(): continue
-            
-            row_count = 0
-            try:
-                with engine.connect() as conn:
-                    row_count = conn.execute(text(f"SELECT COUNT(*) FROM {t}")).scalar()
-            except: pass
-            
-            with st.expander(f"{t} ({row_count} rows)"):
-                cols = insp.get_columns(t)
-                fks = insp.get_foreign_keys(t)
+    with st.container(border=True):
+        st.subheader("Schema Explorer")
+        schema_search = st.text_input("Search tables...", key="schema_search")
+        
+        try:
+            engine = create_engine(st.session_state.db_uri)
+            insp = inspect(engine)
+            for t in insp.get_table_names():
+                if schema_search and schema_search.lower() not in t.lower(): continue
                 
+                row_count = 0
                 try:
-                    pks = insp.get_pk_constraint(t).get('constrained_columns', [])
-                except:
-                    pks = []
+                    with engine.connect() as conn:
+                        row_count = conn.execute(text(f"SELECT COUNT(*) FROM {t}")).scalar()
+                except: pass
                 
-                fk_cols = [fk['constrained_columns'][0] for fk in fks]
-                
-                for c in cols:
-                    cname = c['name']
-                    ctype = str(c['type']).lower()
+                with st.expander(f"{t} ({row_count} rows)"):
+                    cols = insp.get_columns(t)
+                    fks = insp.get_foreign_keys(t)
                     
-                    # Workaround for drag and drop: Add a + button to append to prompt
-                    col_name_html = f"`{cname}`"
-                    tag_class = "tag-int" if "int" in ctype or "num" in ctype else "tag-str"
-                    html_str = f"<span class='{tag_class}'>{ctype}</span>"
-                    if cname in pks: html_str += "<span class='tag-pk'>PK</span>"
-                    if cname in fk_cols: html_str += "<span class='tag-fk'>FK</span>"
+                    try:
+                        pks = insp.get_pk_constraint(t).get('constrained_columns', [])
+                    except:
+                        pks = []
                     
-                    col_left, col_right = st.columns([4, 1])
-                    with col_left:
-                        st.markdown(f"{col_name_html} {html_str}", unsafe_allow_html=True)
-                    with col_right:
-                        if st.button("+", key=f"add_{t}_{cname}"):
-                            st.session_state.prompt_text += f" {t}.{cname} "
-                            st.rerun()
-    except Exception as e:
-        st.error("Cannot load schema.")
+                    fk_cols = [fk['constrained_columns'][0] for fk in fks]
+                    
+                    for c in cols:
+                        cname = c['name']
+                        ctype = str(c['type']).lower()
+                        
+                        # Workaround for drag and drop: Add a + button to append to prompt
+                        col_name_html = f"`{cname}`"
+                        tag_class = "tag-int" if "int" in ctype or "num" in ctype else "tag-str"
+                        html_str = f"<span class='{tag_class}'>{ctype}</span>"
+                        if cname in pks: html_str += "<span class='tag-pk'>PK</span>"
+                        if cname in fk_cols: html_str += "<span class='tag-fk'>FK</span>"
+                        
+                        col_left, col_right = st.columns([4, 1])
+                        with col_left:
+                            st.markdown(f"{col_name_html} {html_str}", unsafe_allow_html=True)
+                        with col_right:
+                            if st.button("+", key=f"add_{t}_{cname}"):
+                                st.session_state.prompt_text += f" {t}.{cname} "
+                                st.rerun()
+        except Exception as e:
+            st.error("Cannot load schema.")
 
 
 with col_chat:
-    st.subheader("Query Workspace")
-    
-    # Quick Templates
-    q_col1, q_col2, q_col3 = st.columns(3)
-    if q_col1.button("Top 10 Records"): 
-        st.session_state.prompt_text = "Show me the top 10 records from "
-        st.rerun()
-    if q_col2.button("Aggregate Sum"): 
-        st.session_state.prompt_text = "Calculate the total sum of "
-        st.rerun()
-    if q_col3.button("Join Analysis"): 
-        st.session_state.prompt_text = "Join table A and B and find "
-        st.rerun()
-    
-    # Render Chat History
-    history_messages = sqlite_mem.get_recent_context(st.session_state.current_session_id, limit=20)
-    chat_container = st.container(height=300)
-    with chat_container:
-        if not history_messages:
-            st.info("Start a new conversation below.")
-        for msg in history_messages:
-            role = "user" if msg["role"] == "user" else "assistant"
-            st.chat_message(role).markdown(msg["content"])
-    
-    # Input Form
-    with st.form("chat_form"):
-        user_input = st.text_area("What do you want to know?", value=st.session_state.prompt_text, height=100)
+    with st.container(border=True):
+        st.subheader("Query Workspace")
         
-        c1, c2 = st.columns([1, 1])
-        btn_execute = c1.form_submit_button("Execute Query", type="primary")
-        btn_preview = c2.form_submit_button("Preview SQL Only")
-
-    if btn_execute or btn_preview:
-        st.session_state.prompt_text = user_input # save state
-        
-        # Check if first message to set title
-        if not history_messages:
-            title = generate_title(user_input)
-            sqlite_mem.set_session_title(st.session_state.current_session_id, title)
-            
-        sqlite_mem.add_message(st.session_state.current_session_id, "user", user_input)
-        
-        mode_instruction = "IMPORTANT: Only write SQL in a ```sql block. DO NOT USE ANY TOOLS." if btn_preview else ""
-        final_prompt = f"{user_input}\n{mode_instruction}"
-        
-        start_time = time.time()
-        with st.spinner("Processing..."):
-            try:
-                resp = st.session_state.chat_session.send_message(final_prompt)
-                st.session_state.last_exec_time = time.time() - start_time
-                sqlite_mem.add_message(st.session_state.current_session_id, "model", resp.text)
-                
-                # Try to extract SQL
-                if "```sql" in resp.text:
-                    sql_block = resp.text.split("```sql")[1].split("```")[0].strip()
-                    st.session_state.last_sql = sql_block
-                    # If Execute mode, try to fetch DF directly for the UI Preview
-                    if btn_execute:
-                        engine = create_engine(st.session_state.db_uri)
-                        st.session_state.last_df = pd.read_sql(sql_block, engine)
-            except Exception as e:
-                st.error(f"Error: {e}")
-                
-        if 'resp' in locals():
+        # Quick Templates
+        q_col1, q_col2, q_col3 = st.columns(3)
+        if q_col1.button("Top 10 Records", use_container_width=True): 
+            st.session_state.prompt_text = "Show me the top 10 records from "
             st.rerun()
+        if q_col2.button("Aggregate Sum", use_container_width=True): 
+            st.session_state.prompt_text = "Calculate the total sum of "
+            st.rerun()
+        if q_col3.button("Join Analysis", use_container_width=True): 
+            st.session_state.prompt_text = "Join table A and B and find "
+            st.rerun()
+        
+        # Render Chat History
+        history_messages = sqlite_mem.get_recent_context(st.session_state.current_session_id, limit=20)
+        chat_container = st.container(height=300)
+        with chat_container:
+            if not history_messages:
+                st.info("Start a new conversation below.")
+            for msg in history_messages:
+                role = "user" if msg["role"] == "user" else "assistant"
+                st.chat_message(role).markdown(msg["content"])
+        
+        # Input Form
+        with st.form("chat_form"):
+            user_input = st.text_area("What do you want to know?", value=st.session_state.prompt_text, height=250)
+            
+            c1, c2 = st.columns([1, 1])
+            btn_execute = c1.form_submit_button("Execute Query", type="primary", use_container_width=True)
+            btn_preview = c2.form_submit_button("Preview SQL Only", use_container_width=True)
+
+        if btn_execute or btn_preview:
+            st.session_state.prompt_text = user_input # save state
+            
+            # Check if first message to set title
+            if not history_messages:
+                title = generate_title(user_input)
+                sqlite_mem.set_session_title(st.session_state.current_session_id, title)
+                
+            sqlite_mem.add_message(st.session_state.current_session_id, "user", user_input)
+            
+            mode_instruction = "IMPORTANT: Only write SQL in a ```sql block. DO NOT USE ANY TOOLS." if btn_preview else ""
+            final_prompt = f"{user_input}\n{mode_instruction}"
+            
+            start_time = time.time()
+            with st.spinner("Processing..."):
+                try:
+                    resp = st.session_state.chat_session.send_message(final_prompt)
+                    st.session_state.last_exec_time = time.time() - start_time
+                    sqlite_mem.add_message(st.session_state.current_session_id, "model", resp.text)
+                    
+                    # Try to extract SQL
+                    if "```sql" in resp.text:
+                        sql_block = resp.text.split("```sql")[1].split("```")[0].strip()
+                        st.session_state.last_sql = sql_block
+                        # If Execute mode, try to fetch DF directly for the UI Preview
+                        if btn_execute:
+                            engine = create_engine(st.session_state.db_uri)
+                            st.session_state.last_df = pd.read_sql(sql_block, engine)
+                except Exception as e:
+                    st.error(f"Error: {e}")
+                    
+            if 'resp' in locals():
+                st.rerun()
 
 
 with col_prev:
-    st.subheader("Quick Preview")
-    if not st.session_state.last_df.empty:
-        st.dataframe(st.session_state.last_df.head(5), use_container_width=True)
-        st.caption(f"Showing top 5 of {len(st.session_state.last_df)} rows")
-        st.markdown("[View Full Results](#bottom-results)")
-    else:
-        st.info("Execute a query to see preview.")
-        if st.session_state.last_sql:
-            st.code(st.session_state.last_sql, language="sql")
+    with st.container(border=True):
+        st.subheader("Quick Preview")
+        if not st.session_state.last_df.empty:
+            st.dataframe(st.session_state.last_df.head(5), use_container_width=True)
+            st.caption(f"Showing top 5 of {len(st.session_state.last_df)} rows")
+            st.markdown("[View Full Results](#bottom-results)")
+        else:
+            st.info("Execute a query to see preview.")
+            if st.session_state.last_sql:
+                st.code(st.session_state.last_sql, language="sql")
 
 st.divider()
 
@@ -315,9 +397,32 @@ with tab_table:
 with tab_chart:
     if not st.session_state.last_df.empty:
         try:
-            st.bar_chart(st.session_state.last_df)
-        except:
-            st.error("Could not automatically render chart.")
+            # Try to identify numeric columns for a better chart
+            numeric_cols = st.session_state.last_df.select_dtypes(include=['number']).columns.tolist()
+            if len(numeric_cols) >= 1:
+                # Use the first numeric column as Y, and the first non-numeric (or first numeric) as X
+                x_col = st.session_state.last_df.columns[0]
+                y_col = numeric_cols[0]
+                
+                fig = px.bar(
+                    st.session_state.last_df, 
+                    x=x_col, 
+                    y=y_col, 
+                    template="plotly_dark",
+                    color_discrete_sequence=["#89b4fa"]
+                )
+                fig.update_layout(
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    margin=dict(l=20, r=20, t=20, b=20)
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("No numeric columns found to plot.")
+        except Exception as e:
+            st.error(f"Could not automatically render chart: {e}")
+    else:
+        st.info("No data to visualize.")
 
 with tab_sql:
     st.code(st.session_state.last_sql, language="sql")
