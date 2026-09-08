@@ -121,7 +121,6 @@ def resolve_db_uri(uri: str) -> str:
         return ""
     
     # 1. Handle Remote Databases (Postgres, MySQL, etc.)
-    # These should be passed directly to SQLAlchemy
     remote_protocols = ("postgresql://", "mysql://", "mssql://", "oracle://", "mariadb://")
     if any(uri.startswith(proto) for proto in remote_protocols):
         return uri
@@ -132,14 +131,10 @@ def resolve_db_uri(uri: str) -> str:
     
     # 3. Handle SQLite URIs
     if uri.startswith("sqlite"):
-        # Separate protocol from path
-        # sqlite:///path (relative) or sqlite:////path (absolute)
         path = uri.replace("sqlite:///", "")
         if path.startswith("/"):
-            # Already absolute
             return uri
         
-        # Resolve relative path against app.py directory
         app_dir = os.path.dirname(os.path.abspath(__file__))
         abs_path = os.path.join(app_dir, path)
         return f"sqlite:////{abs_path}"
@@ -205,7 +200,7 @@ def reset_chat_session():
         st.session_state.genai_client = genai.Client(api_key=api_key)
         
     st.session_state.chat_session = st.session_state.genai_client.chats.create(
-        model="gemini-3.5-flash-lite",
+        model="gemini-1.5-flash",
         config={"tools": create_agent_tools(st.session_state.db_uri), "system_instruction": SYS_INST, "temperature": 0.0}
     )
 
@@ -293,20 +288,27 @@ with st.sidebar:
 
     st.subheader("History")
     search_q = st.text_input("Search history...", placeholder="Keyword...")
-    
     tab_recent, tab_saved = st.tabs(["Recent", "Saved"])
     with tab_recent:
         sessions = sqlite_mem.get_all_sessions()
         for sess in sessions:
             if search_q and search_q.lower() not in sess["title"].lower():
                 continue
+            
             btn_label = sess['title']
             if sess["id"] == st.session_state.current_session_id:
                 btn_label = f"> {btn_label}"
             
-            if st.button(btn_label, key=sess["id"], use_container_width=True):
+            col_btn, col_del = st.columns([4, 1])
+            if col_btn.button(btn_label, key=f"sess_{sess['id']}", use_container_width=True):
                 st.session_state.current_session_id = sess["id"]
                 reset_chat_session()
+                st.rerun()
+            if col_del.button("🗑️", key=f"del_{sess['id']}", use_container_width=True):
+                sqlite_mem.delete_session(sess["id"])
+                if sess["id"] == st.session_state.current_session_id:
+                    st.session_state.current_session_id = str(uuid.uuid4())
+                    reset_chat_session()
                 st.rerun()
 
 # --- 4. Top Info Bar ---
