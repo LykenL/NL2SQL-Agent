@@ -1,5 +1,6 @@
 import streamlit as st
 import os
+import sys
 import uuid
 import json
 import time 
@@ -7,6 +8,9 @@ import pandas as pd
 from dotenv import load_dotenv
 from openai import OpenAI
 from sqlalchemy import create_engine, inspect, text
+
+# Add project root to sys.path so 'src' module can be found
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 
 from src.core.agent_tools import create_agent_tools
 from src.core.memory_manager import SQLiteMemory, VectorMemory
