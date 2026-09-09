@@ -41,13 +41,13 @@ st.markdown("""
         letter-spacing: -0.8px;
         margin: 1.5rem 0 1rem 0;
         text-align: center;
-        background: linear-gradient(135deg, #d4af37 0%, #b8860b 100%);
+        background: linear-gradient(135deg, #818cf8 0%, #4f46e5 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         background-clip: text;
         display: inline-block;
         padding: 0.4rem 0;
-        box-shadow: 0 6px 20px rgba(212, 175, 55, 0.4);
+        box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
         text-shadow: 0 2px 4px rgba(0,0,0,0.3);
         position: relative;
     }
@@ -61,7 +61,7 @@ st.markdown("""
         transform: translateX(-50%);
         width: 60%;
         height: 2px;
-        background: linear-gradient(90deg, transparent, rgba(212, 175, 55, 0.3), transparent);
+        background: linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.3), transparent);
         border-radius: 2px;
     }
     
@@ -143,11 +143,11 @@ st.markdown("""
         border: 1px solid #2a2a2a;
     }
     
-    /* Syntax highlighting tags - amber/copper theme */
-    .tag-int { color: #ffd700; font-size: 0.8em; padding: 2px 4px; background: rgba(255, 215, 0, 0.1); border-radius: 3px; }
-    .tag-str { color: #daa520; font-size: 0.8em; padding: 2px 4px; background: rgba(218, 165, 32, 0.1); border-radius: 3px; }
-    .tag-pk { color: #fbbf24; font-weight: bold; font-size: 0.8em; margin-left: 5px; }
-    .tag-fk { color: #b8860b; font-weight: bold; font-size: 0.8em; margin-left: 5px; }
+    /* Syntax highlighting tags - indigo/blue theme */
+    .tag-int { color: #818cf8; font-size: 0.8em; padding: 2px 4px; background: rgba(99, 102, 241, 0.1); border-radius: 3px; }
+    .tag-str { color: #6366f1; font-size: 0.8em; padding: 2px 4px; background: rgba(99, 102, 241, 0.1); border-radius: 3px; }
+    .tag-pk { color: #4f46e5; font-weight: bold; font-size: 0.8em; margin-left: 5px; }
+    .tag-fk { color: #3730a3; font-weight: bold; font-size: 0.8em; margin-left: 5px; }
     
     /* Dataframe styling */
     .dataframe {
@@ -211,138 +211,7 @@ st.markdown("""
         -moz-osx-font-smoothing: grayscale;
     }
     
-    /* Button styling - amber/copper theme */
-    .stButton>button {
-        background: linear-gradient(135deg, #daa520, #b8860b);
-        color: white;
-        border: none;
-        border-radius: 6px;
-        font-weight: 600;
-        transition: all 0.2s ease;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    
-    .stButton>button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-        background: linear-gradient(135deg, #e6b800, #d4af37);
-    }
-    
-    .stButton>button:active {
-        transform: translateY(0);
-    }
-    
-    /* Primary button styling */
-    .stButton>button[kind="primary"] {
-        background: linear-gradient(135deg, #f4a460, #cd853f);
-        color: white;
-    }
-    
-    .stButton>button[kind="primary"]:hover {
-        background: linear-gradient(135deg, #ffd700, #daa520);
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-    }
-    
-    .stButton>button[kind="primary"]:active {
-        transform: translateY(0);
-    }
-    
-    /* Secondary button styling */
-    .stButton>button[kind="secondary"] {
-        background-color: rgba(218, 165, 32, 0.2);
-        color: #f8f4f0;
-        border: 1px solid rgba(218, 165, 32, 0.3);
-    }
-    
-    .stButton>button[kind="secondary"]:hover {
-        background-color: rgba(218, 165, 32, 0.3);
-    }
-    
-    /* Text area styling */
-    .stTextArea textarea {
-        background-color: rgba(30, 30, 30, 0.7);
-        color: #f8f4f0;
-        border: 1px solid #4a4a4a;
-        border-radius: 8px;
-        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-        font-size: 14px;
-        resize: vertical;
-    }
-    
-    /* Alerts and errors - subtle red */
-    .stAlert {
-        background-color: rgba(139, 0, 0, 0.1);
-        border: 1px solid rgba(139, 0, 0, 0.2);
-        color: #ff6b6b;
-        border-radius: 6px;
-    }
-    
-    /* Success messages - subtle green */
-    .stSuccess {
-        background-color: rgba(34, 139, 34, 0.1);
-        border: 1px solid rgba(34, 139, 34, 0.2);
-        color: #90ee90;
-        border-radius: 6px;
-    }
-    
-    /* Info messages */
-    .stInfo {
-        background-color: rgba(30, 144, 255, 0.1);
-        border: 1px solid rgba(30, 144, 255, 0.2);
-        color: #87ceeb;
-        border-radius: 6px;
-    }
-    
-    /* App title styling - more prominent and elegant */
-    .ide-title {
-        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-        font-weight: 700;
-        font-size: 1.8rem;
-        letter-spacing: -0.5px;
-        margin-bottom: 0.5rem;
-        background: linear-gradient(90deg, #d4af37, #b8860b);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-        color: #d4af37;
-        display: inline-block;
-        padding: 0.2rem 0;
-    }
-    
-    /* Removed duplicate legacy Streamlit hash CSS */
-    
-    /* Text area styling */
-    .stTextArea textarea {
-        background-color: #262730;
-        color: #fafafa;
-        border: 1px solid #4a4a4a;
-        border-radius: 8px;
-        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-        font-size: 14px;
-        resize: vertical;
-    }
-    
-    /* Button styling - amber/copper theme */
-    .stButton>button {
-        background: linear-gradient(135deg, #daa520, #b8860b);
-        color: white;
-        border: none;
-        border-radius: 6px;
-        font-weight: 600;
-        transition: all 0.2s ease;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    
-    .stButton>button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-        background: linear-gradient(135deg, #e6b800, #d4af37);
-    }
-    
-    .stButton>button:active {
-        transform: translateY(0);
-    }
+    /* Relying on Streamlit native primaryColor for buttons */
 </style>
 """, unsafe_allow_html=True)
 
