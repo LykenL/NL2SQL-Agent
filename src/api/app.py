@@ -379,7 +379,7 @@ def get_memories():
 sqlite_mem, vector_mem = get_memories()
 
 if "db_uri" not in st.session_state:
-     st.session_state.db_uri = "sqlite:///../../examples/databases/company.db"
+     st.session_state.db_uri = "sqlite:///examples/databases/company.db"
 if "current_session_id" not in st.session_state:
     st.session_state.current_session_id = str(uuid.uuid4())
 if "prompt_text" not in st.session_state:
