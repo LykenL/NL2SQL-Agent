@@ -118,7 +118,7 @@ st.markdown("""
     }
     
     .stTabs [aria-selected="true"] {
-        background-color: #d4af37;
+        background-color: #6366f1;
         color: white;
     }
     
@@ -177,12 +177,12 @@ st.markdown("""
     
     .stChatMessage[data-testid="user"] {
         background-color: #1e293b;
-        border-left: 3px solid #daa520;
+        border-left: 3px solid #818cf8;
     }
     
     .stChatMessage[data-testid="assistant"] {
         background-color: rgba(30, 30, 30, 0.7);
-        border-left: 3px solid #ffd700;
+        border-left: 3px solid #6366f1;
     }
     
     /* Scrollbar styling */
