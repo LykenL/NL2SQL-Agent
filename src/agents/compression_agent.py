@@ -3,7 +3,7 @@ import time
 from openai import OpenAI
 from dotenv import load_dotenv
 
-from memory_manager import SQLiteMemory, VectorMemory
+from src.core.memory_manager import SQLiteMemory, VectorMemory
 
 load_dotenv()
 api_key = os.getenv("GEMINI_API_KEY")

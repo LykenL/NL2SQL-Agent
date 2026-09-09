@@ -41,9 +41,9 @@ python evaluator.py
 41: ```
 42: 
 43: ### Example: Connecting to Chinook Database
-44: To connect to the Chinook sample database located at `/Users/lykenl/Documents/local agent/data_copilot/chroma_db/Chinook_Sqlite.sqlite`, use the following absolute URI (note the four slashes `sqlite:////` for absolute paths on Unix systems):
+44: To connect to the Chinook sample database located at `/Users/lykenl/Documents/local_agent/data_copilot/chroma_db/Chinook_Sqlite.sqlite`, use the following absolute URI (note the four slashes `sqlite:////` for absolute paths on Unix systems):
 45: ```text
-46: sqlite:////Users/lykenl/Documents/local agent/data_copilot/chroma_db/Chinook_Sqlite.sqlite
+46: sqlite:////Users/lykenl/Documents/local_agent/data_copilot/chroma_db/Chinook_Sqlite.sqlite
 47: ```
 48: 
 49: ---

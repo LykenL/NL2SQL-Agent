@@ -1,7 +1,7 @@
 import time
 import json
-from db_reader import extract_db_schema
-from executor import safe_execute
+from src.core.db_reader import extract_db_schema
+from src.core.executor import safe_execute
 
 def create_agent_tools(db_uri: str) -> tuple:
     def get_database_schema(force_refresh: bool = False) -> str:

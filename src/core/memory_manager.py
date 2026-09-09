@@ -9,7 +9,7 @@ class SQLiteMemory:
     Episodic Memory (短期/近距记忆)
     负责存储明细级别的多轮对话上下文。
     """
-    def __init__(self, db_path="memory_episodic.db"):
+    def __init__(self, db_path="data/episodic_memory/memory_episodic.db"):
         self.db_path = db_path
         self._init_db()
 
@@ -104,7 +104,7 @@ class VectorMemory:
     Semantic Memory (长期/远距记忆)
     负责利用大模型的 Embeddings 进行高维检索。
     """
-    def __init__(self, persist_directory="./chroma_db"):
+    def __init__(self, persist_directory="../../../data/chroma_db"):
         # 本地初始化 ChromaDB
         self.client = chromadb.PersistentClient(path=persist_directory)
         self.collection = self.client.get_or_create_collection("semantic_memory")

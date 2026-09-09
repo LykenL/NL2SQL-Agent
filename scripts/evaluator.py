@@ -1,12 +1,13 @@
 import os
 import time
 import sys
-from google import genai
+import json
+from openai import OpenAI
 from dotenv import load_dotenv
-from agent_tools import create_agent_tools
+from src.core.agent_tools import create_agent_tools
 
 # 设定我们要测评的基准数据库
-DB_URI = "sqlite:///examples/company.db"
+DB_URI = "sqlite:///examples/databases/company.db"
 
 # 黄金数据集 (Golden Dataset)
 # 每个用例包含：提问 (question) 和 必须出现在回答中的预期关键词 (expected_keywords)
@@ -64,9 +65,13 @@ def run_evaluation():
     print("-" * 50)
 
     # 初始化大模型 (无记忆隔离模式，确保每次测验是完全公正的 Zero-shot)
-    client = genai.Client(api_key=api_key)
-    tools = create_agent_tools(DB_URI)
-    
+    client = OpenAI(
+        api_key=os.getenv('OLLAMA_API_KEY', 'ollama'),
+        base_url=os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434/v1'),
+        default_headers={"ngrok-skip-browser-warning": "true"}
+    )
+    tools_schema, tool_map = create_agent_tools(DB_URI)
+
     system_instruction = """You are a Multi-Agent Database Copilot and Data Scientist.
 You have access to tools to fetch the database schema and execute Python code.
 1. ALWAYS use the `get_database_schema` tool first.
@@ -89,32 +94,68 @@ You have access to tools to fetch the database schema and execute Python code.
         print("⏳ Agent is thinking and executing sandbox code...")
         
         # 每次测试都新建一个干净的 chat session，防止之前的测试污染上下文
-        chat = client.chats.create(
-            model="gemma-4-31b-it",
-            config={
-                "tools": tools,
-                "system_instruction": system_instruction,
-                "temperature": 0.0
-            }
-        )
+        messages = [
+            {"role": "system", "content": system_instruction},
+            {"role": "user", "content": question}
+        ]
         
         start_time = time.time()
         
         try:
-            # 发送请求
-            response = chat.send_message(question)
+            # 发送请请求
+            response = client.chat.completions.create(
+                model="gemma4:31b-cloud",
+                messages=messages,
+                tools=tools_schema,
+                temperature=0.0
+            )
             
-            # 计算耗时
+            # Process tool calls
+            max_iterations = 7
+            iteration = 0
+            msg = response.choices[0].message
+            
+            while msg.tool_calls and iteration < max_iterations:
+                iteration += 1
+                messages.append({"role": "assistant", "content": msg.content or "", "tool_calls": msg.tool_calls})
+                
+                for tool_call in msg.tool_calls:
+                    fname = tool_call.function.name
+                    fargs = json.loads(tool_call.function.arguments)
+                    if fname in tool_map:
+                        res = tool_map[fname](**fargs)
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": tool_call.id,
+                            "name": fname,
+                            "content": str(res)
+                        })
+                    else:
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": tool_call.id,
+                            "name": fname,
+                            "content": "Tool not found"
+                        })
+                
+                response = client.chat.completions.create(
+                    model="gemma4:31b-cloud",
+                    messages=messages,
+                    tools=tools_schema,
+                    temperature=0.0
+                )
+                msg = response.choices[0].message
+            
+            # Calculate latency
             latency = time.time() - start_time
             total_latency += latency
             
-            # 获取 Token 消耗 (Google GenAI SDK 结构)
-            tokens_used = 0
-            if hasattr(response, 'usage_metadata') and response.usage_metadata:
-                tokens_used = response.usage_metadata.total_token_count
+            # Estimate tokens (OpenAI doesn't always provide exact count in this setup)
+            # Rough estimation: ~4 chars per token
+            tokens_used = len((msg.content or "")) // 4
             total_tokens += tokens_used
             
-            answer_text = response.text.lower()
+            answer_text = (msg.content or "").lower()
             
             # 关键词精准命中法 (Keyword Match Eval)
             # 只要预期关键词有【任意一个】命中，我们就认为大模型算对了
@@ -129,7 +170,7 @@ You have access to tools to fetch the database schema and execute Python code.
             print(f"[{status}] Latency: {latency:.2f}s | Tokens Used: {tokens_used}")
             if not is_success:
                 print(f"   ⚠️ Expected keywords to include: {expected}")
-                print(f"   🤖 Actual output excerpt: {response.text[:100]}...")
+                print(f"   🤖 Actual output excerpt: {(msg.content or '')[:100]}...")
                 
             results_log.append({
                 "id": idx,
@@ -145,18 +186,18 @@ You have access to tools to fetch the database schema and execute Python code.
     print("\n\n" + "="*50)
     print("📈 AGENT Comprehensive Performance Evaluation Report (Metrics Report)")
     print("="*50)
-    
+
     if len(TEST_CASES) == 0:
         return
         
     success_rate = (successful_tasks / len(TEST_CASES)) * 100
     avg_latency = total_latency / len(TEST_CASES)
     avg_tokens = total_tokens / len(TEST_CASES)
-    
+
     # 假设每百万 Token 价格为 0.15 美元 (Gemini Flash Lite 参考价)
     cost_per_million = 0.15
     total_cost_usd = (total_tokens / 1000000) * cost_per_million
-    
+
     print(f"🎯 Task Success Rate : {success_rate:.1f}% ({successful_tasks}/{len(TEST_CASES)})")
     print(f"⚡ Average Latency   : {avg_latency:.2f} s / question")
     print(f"🪙 Avg Token Usage   : {avg_tokens:.0f} Tokens / question")

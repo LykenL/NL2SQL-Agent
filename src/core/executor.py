@@ -1,6 +1,7 @@
 import re
 import io
 import contextlib
+import pandas as pd
 # A list of keywords we want to completely block the LLM from executing.
 DANGEROUS_KEYWORDS = [
     "os.system", "os.remove", "os.rmdir", "subprocess", 

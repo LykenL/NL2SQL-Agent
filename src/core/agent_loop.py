@@ -5,9 +5,9 @@ import uuid
 from openai import OpenAI
 from dotenv import load_dotenv
 
-from agent_tools import create_agent_tools
-from memory_manager import SQLiteMemory, VectorMemory
-from compression_agent import compress_session_memory
+from src.core.agent_tools import create_agent_tools
+from src.core.memory_manager import SQLiteMemory, VectorMemory
+from src.agents.compression_agent import compress_session_memory
 
 # Load environment variables
 load_dotenv()
@@ -18,7 +18,7 @@ if not api_key:
 
 def main():
     parser = argparse.ArgumentParser(description="Cognitive Database Copilot Agent")
-    parser.add_argument("db_uri", help="SQLAlchemy connection string (e.g., sqlite:///company.db)")
+    parser.add_argument("db_uri", help="SQLAlchemy connection string (e.g., sqlite:///../examples/databases/company.db)")
     args = parser.parse_args()
     
     print(f"🔧 Initializing Cognitive Agent with Database: {args.db_uri}")
