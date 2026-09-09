@@ -369,7 +369,7 @@ col_schema, col_chat = st.columns([1, 2])
 with col_schema:
     st.subheader("Schema Explorer")
     # Fixed height and scrollable container for schema explorer
-    schema_container = st.container(height=600, border=True)
+    schema_container = st.container(height=750, border=True)
     with schema_container:
         schema_search = st.text_input("Search tables...", key="schema_search")
         
