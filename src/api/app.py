@@ -520,9 +520,16 @@ with st.sidebar:
             if sess["id"] == st.session_state.current_session_id:
                 btn_label = f"> {btn_label}"
             
-            if st.button(btn_label, key=sess["id"], use_container_width=True):
+            col_btn, col_del = st.columns([0.85, 0.15])
+            if col_btn.button(btn_label, key=f"btn_{sess['id']}", use_container_width=True):
                 st.session_state.current_session_id = sess["id"]
                 reset_chat_session()
+                st.rerun()
+            if col_del.button("🗑️", key=f"del_{sess['id']}", use_container_width=True, help="Delete session"):
+                sqlite_mem.delete_session(sess["id"])
+                if sess["id"] == st.session_state.current_session_id:
+                    st.session_state.current_session_id = str(uuid.uuid4())
+                    reset_chat_session()
                 st.rerun()
 
 # --- 4. Top Info Bar ---
