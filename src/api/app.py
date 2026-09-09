@@ -306,57 +306,7 @@ st.markdown("""
         padding: 0.2rem 0;
     }
     
-    /* Sidebar styling - dark theme with charcoal gray */
-    .css-1d391kg, .css-1lcbmhc, .css-1outpf7 {
-        background-color: #121212;
-        border-right: 1px solid #2a2a2a;
-    }
-    
-    /* Sidebar text - light colors */
-    .css-1d391kg .stMarkdown, 
-    .css-1d391kg .stCaption,
-    .css-1d391kg .stRadio label,
-    .css-1d391kg .st-expanderHeader,
-    .css-1d391kg .stButton>button {
-        color: #f8f4f0 !important;
-    }
-    
-    /* Sidebar header */
-    .css-1d391kg .stMarkdown h1,
-    .css-1d391kg .stMarkdown h2,
-    .css-1d391kg .stMarkdown h3 {
-        color: #ffffff !important;
-    }
-    
-    /* Sidebar expander */
-    .css-1d391kg .st-expander {
-        background-color: rgba(30, 30, 30, 0.7);
-        border: 1px solid #2a2a2a;
-        border-radius: 12px;
-        margin-bottom: 1.5rem;
-    }
-    
-    /* Sidebar radio buttons */
-    .css-1d391kg .stRadio > div {
-        background-color: transparent;
-        padding: 0.5rem 0;
-    }
-    
-    .css-1d391kg .stRadio > div > label > div:first-child {
-        background-color: #1e1e1e;
-        border: 2px solid #2a2a2a;
-        border-radius: 8px;
-    }
-    
-    .css-1d391kg .stRadio > div > label > div:first-child:hover {
-        background-color: #262626;
-        border-color: #3a3a3a;
-    }
-    
-    .css-1d391kg .stRadio > div[data-checked="true"] > label > div:first-child {
-        background: linear-gradient(135deg, #d4af37, #b8860b);
-        border-color: #d4af37;
-    }
+    /* Removed duplicate legacy Streamlit hash CSS */
     
     /* Text area styling */
     .stTextArea textarea {
