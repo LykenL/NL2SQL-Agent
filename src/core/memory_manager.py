@@ -1,146 +1,192 @@
-import sqlite3
-import datetime
-import chromadb
+import os
 import uuid
 import json
+import datetime
+from sqlalchemy import create_engine, text, Table, Column, Integer, String, MetaData, DateTime
+from sqlalchemy.orm import sessionmaker
 
-class SQLiteMemory:
+class DatabaseMemory:
     """
     Episodic Memory (短期/近距记忆)
-    负责存储明细级别的多轮对话上下文。
+    支持 SQLite (本地) 和 PostgreSQL (云端)
     """
-    def __init__(self, db_path="data/episodic_memory/memory_episodic.db"):
-        import os
-        self.db_path = db_path
-        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
-        self._init_db()
+    def __init__(self, db_url=None):
+        if db_url is None:
+            db_url = os.getenv("DATABASE_URL", "sqlite:///data/episodic_memory/memory_episodic.db")
+        
+        self.db_url = db_url
+        if self.db_url.startswith("sqlite"):
+            # Ensure local directory exists for sqlite
+            db_path = self.db_url.replace("sqlite:///", "")
+            if "/" in db_path:
+                os.makedirs(os.path.dirname(db_path), exist_ok=True)
+                
+        # SQLAlchemy setup
+        self.engine = create_engine(self.db_url)
+        self.metadata = MetaData()
+        
+        self.history_table = Table(
+            'history', self.metadata,
+            Column('id', Integer, primary_key=True, autoincrement=True),
+            Column('session_id', String),
+            Column('timestamp', String),
+            Column('role', String),
+            Column('content', String)
+        )
+        
+        self.sessions_table = Table(
+            'sessions', self.metadata,
+            Column('session_id', String, primary_key=True),
+            Column('title', String),
+            Column('created_at', String)
+        )
+        
+        self.metadata.create_all(self.engine)
+        self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
 
-    def _init_db(self):
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute('''
-                CREATE TABLE IF NOT EXISTS history (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    session_id TEXT,
-                    timestamp DATETIME,
-                    role TEXT,
-                    content TEXT
-                )
-            ''')
-            conn.execute('''
-                CREATE TABLE IF NOT EXISTS sessions (
-                    session_id TEXT PRIMARY KEY,
-                    title TEXT,
-                    created_at DATETIME
-                )
-            ''')
-            
     def add_message(self, session_id: str, role: str, content: str):
-        """保存单条聊天记录"""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute('''
-                INSERT INTO history (session_id, timestamp, role, content)
-                VALUES (?, ?, ?, ?)
-            ''', (session_id, datetime.datetime.now().isoformat(), role, content))
-            
+        with self.engine.begin() as conn:
+            conn.execute(
+                self.history_table.insert().values(
+                    session_id=session_id,
+                    timestamp=datetime.datetime.now().isoformat(),
+                    role=role,
+                    content=content
+                )
+            )
+
     def get_recent_context(self, session_id: str, limit: int = 10) -> list:
-        """获取最近 N 条对话上下文"""
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute('''
-                SELECT role, content FROM history
-                WHERE session_id = ?
-                ORDER BY id DESC LIMIT ?
-            ''', (session_id, limit))
-            # Reverse to maintain chronological order
-            return [{"role": row[0], "content": row[1]} for row in reversed(cursor.fetchall())]
+        with self.engine.connect() as conn:
+            query = self.history_table.select().where(
+                self.history_table.c.session_id == session_id
+            ).order_by(self.history_table.c.id.desc()).limit(limit)
             
+            rows = conn.execute(query).fetchall()
+            return [{"role": row.role, "content": row.content} for row in reversed(rows)]
+
     def get_all_context_for_compression(self, session_id: str) -> str:
-        """导出当前 Session 的所有对话，供后台 Agent 压缩使用"""
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute('''
-                SELECT role, content FROM history
-                WHERE session_id = ?
-                ORDER BY id ASC
-            ''', (session_id,))
-            lines = [f"{row[0]}: {row[1]}" for row in cursor.fetchall()]
-            return "\n".join(lines)
+        with self.engine.connect() as conn:
+            query = self.history_table.select().where(
+                self.history_table.c.session_id == session_id
+            ).order_by(self.history_table.c.id.asc())
+            
+            rows = conn.execute(query).fetchall()
+            return "\n".join([f"{row.role}: {row.content}" for row in rows])
 
     def set_session_title(self, session_id: str, title: str):
-        """设置或更新会话标题"""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute('''
-                INSERT INTO sessions (session_id, title, created_at)
-                VALUES (?, ?, ?)
-                ON CONFLICT(session_id) DO UPDATE SET title=excluded.title
-            ''', (session_id, title, datetime.datetime.now().isoformat()))
+        # SQLAlchemy upsert varies by dialect, but since we support both, a simple check-and-insert/update is safest
+        with self.engine.begin() as conn:
+            existing = conn.execute(
+                self.sessions_table.select().where(self.sessions_table.c.session_id == session_id)
+            ).fetchone()
+            
+            if existing:
+                conn.execute(
+                    self.sessions_table.update().where(
+                        self.sessions_table.c.session_id == session_id
+                    ).values(title=title)
+                )
+            else:
+                conn.execute(
+                    self.sessions_table.insert().values(
+                        session_id=session_id,
+                        title=title,
+                        created_at=datetime.datetime.now().isoformat()
+                    )
+                )
 
     def get_all_sessions(self) -> list:
-        """获取所有历史 Session 列表及标题，按最新对话时间排序"""
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute('''
+        with self.engine.connect() as conn:
+            # Group by session_id and get max timestamp
+            query = text("""
                 SELECT h.session_id, MAX(h.timestamp) as last_time, s.title
                 FROM history h
                 LEFT JOIN sessions s ON h.session_id = s.session_id
-                GROUP BY h.session_id
+                GROUP BY h.session_id, s.title
                 ORDER BY last_time DESC
-            ''')
+            """)
+            rows = conn.execute(query).fetchall()
             
             res = []
-            for row in cursor.fetchall():
+            for row in rows:
                 sess_id = row[0]
                 title = row[2]
-                
                 if not title:
                     title = "Generating Title..."
                 res.append({"id": sess_id, "title": title})
             return res
 
     def delete_session(self, session_id: str):
-        """删除特定 Session 的所有记录及标题"""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute('DELETE FROM history WHERE session_id = ?', (session_id,))
-            conn.execute('DELETE FROM sessions WHERE session_id = ?', (session_id,))
-
+        with self.engine.begin() as conn:
+            conn.execute(self.history_table.delete().where(self.history_table.c.session_id == session_id))
+            conn.execute(self.sessions_table.delete().where(self.sessions_table.c.session_id == session_id))
 
 class VectorMemory:
     """
     Semantic Memory (长期/远距记忆)
-    负责利用大模型的 Embeddings 进行高维检索。
+    支持 ChromaDB (本地) 和 Pinecone (云端)
     """
     def __init__(self, persist_directory="data/chroma_db"):
-        # 本地初始化 ChromaDB
-        import os
-        os.makedirs(persist_directory, exist_ok=True)
-        self.client = chromadb.PersistentClient(path=persist_directory)
-        self.collection = self.client.get_or_create_collection("semantic_memory")
+        self.pinecone_key = os.getenv("PINECONE_API_KEY")
+        self.pinecone_host = os.getenv("PINECONE_HOST")
+        self.is_pinecone = bool(self.pinecone_key and self.pinecone_host)
+
+        if self.is_pinecone:
+            from pinecone import Pinecone
+            self.pc = Pinecone(api_key=self.pinecone_key)
+            self.index = self.pc.Index(host=self.pinecone_host)
+            
+            # Since Pinecone requires embeddings, we need OpenAI or similar if we use it directly,
+            # but for this script we will use the OpenAI embedding client
+            from openai import OpenAI
+            self.oai = OpenAI()
+        else:
+            import chromadb
+            os.makedirs(persist_directory, exist_ok=True)
+            self.client = chromadb.PersistentClient(path=persist_directory)
+            self.collection = self.client.get_or_create_collection("semantic_memory")
+
+    def _get_embedding(self, text: str) -> list:
+        # Helper to get embedding if using Pinecone
+        response = self.oai.embeddings.create(
+            input=text,
+            model="text-embedding-3-small" # Requires 1536 dim
+        )
+        return response.data[0].embedding
 
     def add_memory(self, logic_content: str, metadata: dict = None):
-        """存入提取出的 Entity, Action, Result 等高价值逻辑块"""
-        if metadata is None:
-            metadata = {}
+        if metadata is None: metadata = {}
         metadata["timestamp"] = datetime.datetime.now().isoformat()
+        metadata["text"] = logic_content # Pinecone needs text in metadata to retrieve it
         
-        # ChromaDB 默认使用内置的 all-MiniLM-L6-v2 模型自动进行 Embedding
-        self.collection.add(
-            documents=[logic_content],
-            metadatas=[metadata],
-            ids=[str(uuid.uuid4())]
-        )
+        doc_id = str(uuid.uuid4())
+        
+        if self.is_pinecone:
+            vector = self._get_embedding(logic_content)
+            self.index.upsert(vectors=[{"id": doc_id, "values": vector, "metadata": metadata}])
+        else:
+            self.collection.add(
+                documents=[logic_content],
+                metadatas=[metadata],
+                ids=[doc_id]
+            )
 
     def search_memory(self, query: str, n_results: int = 3) -> list:
-        """根据用户的当前提问，召回相关的历史知识块"""
-        # 如果库是空的，直接返回空列表
-        if self.collection.count() == 0:
-            return []
+        if self.is_pinecone:
+            vector = self._get_embedding(query)
+            results = self.index.query(vector=vector, top_k=n_results, include_metadata=True)
+            if not results.matches:
+                return []
+            # Return a list of texts
+            return [match.metadata["text"] for match in results.matches if "text" in match.metadata]
+        else:
+            if self.collection.count() == 0: return []
+            actual_n = min(n_results, self.collection.count())
+            results = self.collection.query(query_texts=[query], n_results=actual_n)
             
-        # 限制召回数量不能大于库中的总条数
-        actual_n = min(n_results, self.collection.count())
-            
-        results = self.collection.query(
-            query_texts=[query],
-            n_results=actual_n
-        )
-        
-        if not results["documents"] or not results["documents"][0]:
-            return []
-        
-        return results["documents"][0]
+            if not results["documents"] or not results["documents"][0]:
+                return []
+            return results["documents"][0]
+
+# For backwards compatibility with app.py
+SQLiteMemory = DatabaseMemory

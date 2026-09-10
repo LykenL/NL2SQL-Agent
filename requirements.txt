@@ -8,3 +8,7 @@ plotly
 psycopg2-binary
 pymysql
 
+fastapi
+uvicorn
+pinecone-client
+sse-starlette
