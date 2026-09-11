@@ -38,13 +38,13 @@ def create_agent_tools(db_uri: str) -> tuple:
             "type": "function",
             "function": {
                 "name": "execute_python_code",
-                "description": "Executes Python code locally and returns the standard output or error tracebacks. The code automatically has a global variable named `db_uri` injected. Use pandas and SQLAlchemy.",
+                "description": "Executes Python code locally and returns the standard output or error tracebacks. The code automatically has a global variable named `DATABASE_URI` injected. Use pandas and SQLAlchemy. IMPORTANT: Whenever asked to visualize, analyze, or plot data, you MUST generate an interactive chart using `plotly.express` and store the final figure in a variable named `fig`. Do NOT just print text statistics unless explicitly asked.",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "code_string": {
                             "type": "string",
-                            "description": "The raw executable Python code. Do not include markdown code block formatting (like ```python)."
+                            "description": "The raw executable Python code. ALWAYS output clean, complete Python code. Do not include markdown code block formatting."
                         }
                     },
                     "required": ["code_string"]

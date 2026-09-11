@@ -24,7 +24,8 @@ You have access to tools to fetch the database schema and execute Python code.
 4. If the code fails, read the error message, fix your code, and try again.
 5. NEVER write INSERT, UPDATE, DELETE, or DROP statements. Only SELECT.
 6. MANDATORY: In your final explanation to the user, you MUST include the EXACT Python code you successfully executed, formatted in a ```python ... ``` markdown block.
-7. Explain the final result clearly to the user in English.
+7. VITAL FOR VISUALIZATIONS: If the user requests a chart or visualization, your Python code MUST import `plotly.express` and store the final figure in a variable exactly named `fig`. Do NOT use matplotlib.
+8. Explain the final result clearly to the user in their language.
 """
 
     messages = [{"role": "system", "content": system_instruction}]

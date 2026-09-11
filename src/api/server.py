@@ -107,8 +107,7 @@ async def execute_code(request: ExecuteRequest):
             exec(code, {}, local_vars)
             
             # 2. 尝试从本地变量里捕获 Plotly 图像
-            # 优先查找被我们替换出来的 __captured_fig
-            fig_to_render = local_vars.get("__captured_fig")
+            fig_to_render = local_vars.get("__captured_fig") or local_vars.get("fig")
             
             # 如果没找到，扫描所有变量，找类型为 Figure 的
             if not fig_to_render:
