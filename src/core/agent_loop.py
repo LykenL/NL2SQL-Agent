@@ -90,11 +90,16 @@ You have access to tools to fetch the database schema and execute Python code.
     sqlite_mem.add_message(session_id, "assistant", final_text)
     
     # We parse the python code block out if it exists
+    import re
     executed_code = ""
-    if "```python" in final_text:
-        executed_code = final_text.split("```python")[1].split("```")[0].strip()
-        final_text = final_text.split("```python")[0] + "\n*(Python Code output omitted from chat, see Execution Results)*\n" + (final_text.split("```")[1] if "```" in final_text.split("```python")[1] else "")
-        
+    match = re.search(r'```(?:python|sql)(.*?)```', final_text, re.DOTALL | re.IGNORECASE)
+    if match:
+        executed_code = match.group(1).strip()
+        final_text = re.sub(r'```(?:python|sql).*?```', '\n*(Code pushed to right Render pane)*\n', final_text, flags=re.DOTALL | re.IGNORECASE)
+    
+    final_text = final_text.strip()
+    if not final_text:
+        final_text = "I have finished processing your request. Please check the Code/Render pane for the results."
     exec_time = time.time() - start_time
     
     return final_text, executed_code, None, exec_time
