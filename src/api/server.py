@@ -118,7 +118,7 @@ async def execute_code(request: ExecuteRequest):
                         
             # 如果找到了 Plotly 图表，转换成独立 HTML
             if fig_to_render:
-                output_html = fig_to_render.to_html(full_html=False, include_plotlyjs='cdn')
+                output_html = fig_to_render.to_html(full_html=True, include_plotlyjs='cdn')
                 
         except Exception as e:
             error_msg = traceback.format_exc()

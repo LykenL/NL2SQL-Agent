@@ -303,7 +303,7 @@ export default function Home() {
             <TabsContent value="render" className="flex-1 p-8 m-0 flex flex-col data-[state=active]:flex bg-[#050505]">
               {renderHtml ? (
                  <div className="flex-1 bg-white overflow-auto rounded-xl">
-                    <div dangerouslySetInnerHTML={{ __html: renderHtml }} className="w-full h-full" />
+                    <iframe srcDoc={renderHtml} className="w-full h-full border-0 bg-transparent rounded-xl" sandbox="allow-scripts allow-popups" />
                  </div>
               ) : renderError ? (
                  <div className="flex-1 bg-red-950/20 border border-red-500/30 rounded-xl p-4 overflow-auto text-red-400 text-xs font-mono whitespace-pre-wrap">
