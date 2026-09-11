@@ -98,15 +98,16 @@ export default function Home() {
       </header>
 
       {/* Main 3-Pane Layout */}
-      <main className="flex-1 w-full flex overflow-hidden">
+      <main className="flex-1 min-h-0 w-full flex overflow-hidden">
         
         {/* Left Pane: Schema (25%) */}
-        <aside className="w-1/4 border-r border-white/10 bg-[#0a0a0a] flex flex-col hidden lg:flex shadow-2xl z-20">
-          <div className="p-4 border-b border-white/10 flex items-center gap-2 bg-[#121212]">
+        <aside className="w-1/4 border-r border-white/10 bg-[#0a0a0a] flex flex-col hidden lg:flex shadow-2xl z-20 min-h-0">
+          <div className="p-4 border-b border-white/10 flex items-center gap-2 bg-[#121212] shrink-0">
             <Database className="w-4 h-4 text-indigo-400" />
             <h2 className="text-sm font-bold text-gray-200 uppercase tracking-wider">Data Context</h2>
           </div>
-          <ScrollArea className="flex-1 p-4 bg-[#050505]">
+          <ScrollArea className="flex-1 min-h-0 bg-[#050505]">
+            <div className="p-4">
             {schemaObj ? (
               <div className="space-y-4 pb-10">
                 {Object.entries(schemaObj).map(([tableName, tableInfo]: any) => (
@@ -141,6 +142,7 @@ export default function Home() {
                 {schemaText}
               </pre>
             )}
+            </div>
           </ScrollArea>
         </aside>
 
