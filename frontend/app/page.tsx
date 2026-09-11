@@ -78,7 +78,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-[#050505] text-gray-100 flex flex-col font-sans selection:bg-indigo-500/30 overflow-hidden">
+    <div className="h-screen bg-[#050505] text-gray-100 flex flex-col font-sans selection:bg-indigo-500/30 overflow-hidden">
       
       {/* Header */}
       <header className="h-16 shrink-0 border-b border-white/10 bg-[#0a0a0a]/90 backdrop-blur-md flex items-center px-6 justify-between sticky top-0 z-50 shadow-sm shadow-black/50">
