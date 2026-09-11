@@ -118,6 +118,23 @@ async def execute_code(request: ExecuteRequest):
                         
             # 如果找到了 Plotly 图表，转换成独立 HTML
             if fig_to_render:
+                try:
+                    # 强制套用深色极客主题
+                    fig_to_render.update_layout(
+                        template="plotly_dark",
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        font=dict(family="system-ui, -apple-system, sans-serif", color="#9ca3af"),
+                        margin=dict(l=40, r=40, t=60, b=40),
+                        hovermode="x unified",
+                        colorway=["#8b5cf6", "#a855f7", "#6366f1", "#ec4899", "#14b8a6"]
+                    )
+                    # 柔化边缘
+                    if hasattr(fig_to_render, "data") and len(fig_to_render.data) > 0:
+                        fig_to_render.update_traces(marker=dict(line=dict(width=0)), selector=dict(type='bar'))
+                        fig_to_render.update_traces(marker=dict(line=dict(width=0)), selector=dict(type='pie'))
+                except Exception:
+                    pass
                 output_html = fig_to_render.to_html(full_html=True, include_plotlyjs='cdn')
                 
         except Exception as e:
