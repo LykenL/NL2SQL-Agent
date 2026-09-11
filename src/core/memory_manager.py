@@ -138,8 +138,8 @@ class VectorMemory:
             
             # Since Pinecone requires embeddings, we need OpenAI or similar if we use it directly,
             # but for this script we will use the OpenAI embedding client
-            from openai import OpenAI
-            self.oai = OpenAI()
+            from sentence_transformers import SentenceTransformer
+            self.embed_model = SentenceTransformer('all-MiniLM-L6-v2')
         else:
             import chromadb
             os.makedirs(persist_directory, exist_ok=True)
@@ -148,11 +148,7 @@ class VectorMemory:
 
     def _get_embedding(self, text: str) -> list:
         # Helper to get embedding if using Pinecone
-        response = self.oai.embeddings.create(
-            input=text,
-            model="text-embedding-3-small" # Requires 1536 dim
-        )
-        return response.data[0].embedding
+        return self.embed_model.encode(text).tolist()
 
     def add_memory(self, logic_content: str, metadata: dict = None):
         if metadata is None: metadata = {}
