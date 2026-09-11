@@ -331,7 +331,7 @@ export default function Home() {
               )}
               { (renderHtml || renderError) && (
                  <div className="mt-4 flex justify-end">
-                    <Button onClick={() => { setRenderHtml(""); setRenderError(""); }} variant="outline" className="border-white/10 text-xs">
+                    <Button onClick={() => { setRenderHtml(""); setRenderError(""); }} variant="outline" className="border-white/20 text-gray-400 hover:text-white hover:bg-white/10 text-xs">
                         Clear Render
                     </Button>
                  </div>
