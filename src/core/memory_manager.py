@@ -136,10 +136,9 @@ class VectorMemory:
             self.pc = Pinecone(api_key=self.pinecone_key)
             self.index = self.pc.Index(host=self.pinecone_host)
             
-            # Since Pinecone requires embeddings, we need OpenAI or similar if we use it directly,
-            # but for this script we will use the OpenAI embedding client
-            from sentence_transformers import SentenceTransformer
-            self.embed_model = SentenceTransformer('all-MiniLM-L6-v2')
+            # Use remote Ollama node for embeddings (nomic-embed-text, 768 dim)
+            self.ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+            self.ollama_api_key = os.getenv("OLLAMA_API_KEY", "ollama")
         else:
             import chromadb
             os.makedirs(persist_directory, exist_ok=True)
@@ -147,8 +146,22 @@ class VectorMemory:
             self.collection = self.client.get_or_create_collection("semantic_memory")
 
     def _get_embedding(self, text: str) -> list:
-        # Helper to get embedding if using Pinecone
-        return self.embed_model.encode(text).tolist()
+        # Use remote Ollama /api/embeddings endpoint
+        import requests
+        url = self.ollama_base_url.replace("/v1", "/api/embeddings")
+        headers = {
+            "Authorization": f"Bearer {self.ollama_api_key}",
+            "ngrok-skip-browser-warning": "true"
+        }
+        data = {
+            "model": "nomic-embed-text",
+            "prompt": text
+        }
+        resp = requests.post(url, json=data, headers=headers)
+        if resp.status_code == 200:
+            return resp.json()["embedding"]
+        else:
+            raise Exception(f"Failed to get embedding from Ollama: {resp.text}")
 
     def add_memory(self, logic_content: str, metadata: dict = None):
         if metadata is None: metadata = {}
