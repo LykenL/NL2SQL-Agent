@@ -6,6 +6,8 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Terminal, Code2, Play, Database, Send, Sparkles, LayoutDashboard, Key } from "lucide-react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
@@ -209,9 +211,11 @@ export default function Home() {
                     ? "bg-gradient-to-br from-indigo-600 to-indigo-800 text-white rounded-br-sm shadow-[0_4px_20px_rgba(79,70,229,0.3)]"
                     : "bg-[#121212] text-gray-200 rounded-bl-sm border border-white/10 shadow-xl"
                 }`}>
-                  <p className="whitespace-pre-wrap leading-relaxed text-[15px]">
-                    {msg.content}
-                  </p>
+                  <div className="prose prose-invert max-w-none text-[15px] prose-p:leading-relaxed prose-pre:bg-black/20 prose-pre:border prose-pre:border-white/10 prose-code:text-indigo-200">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {msg.content}
+                    </ReactMarkdown>
+                  </div>
                 </div>
               </div>
             ))}

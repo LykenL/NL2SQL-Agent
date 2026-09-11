@@ -95,7 +95,7 @@ async def execute_code(request: ExecuteRequest):
     
     # 连接当前数据库
     uri = os.getenv("DATABASE_URL", "sqlite:///examples/databases/company.db")
-    local_vars = {"DATABASE_URI": uri}
+    local_vars = {"DATABASE_URI": uri, "db_uri": uri}
     
     output_html = ""
     error_msg = ""
