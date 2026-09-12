@@ -10,5 +10,5 @@ pymysql
 
 fastapi
 uvicorn
-pinecone-client
+pinecone
 sse-starlette
