@@ -23,7 +23,7 @@ def extract_db_schema(db_path: str = "sqlite:///company.db", force_refresh: bool
             return _schema_cache[db_path]
     
     try:
-        engine = create_engine(db_path)
+        engine = create_engine(db_path, connect_args={'connect_timeout': 10})
         # The inspector is SQLAlchemy's built-in database scanner
         inspector = inspect(engine)
         
