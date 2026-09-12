@@ -38,7 +38,7 @@ def create_agent_tools(db_uri: str) -> tuple:
             "type": "function",
             "function": {
                 "name": "execute_python_code",
-                "description": "Executes Python code locally and returns the standard output or error tracebacks. The code automatically has a global variable named `DATABASE_URI` injected. Use pandas and SQLAlchemy. IMPORTANT: Whenever asked to visualize, analyze, or plot data, you MUST generate an interactive chart using `plotly.express` and store the final figure in a variable named `fig`. Do NOT manually set templates, background colors, or custom fonts; the execution sandbox will automatically apply a unified dark theme.",
+                "description": "Executes Python code locally and returns the standard output or error tracebacks. The code automatically has a global variable named `DATABASE_URI` injected. Use pandas and SQLAlchemy. IMPORTANT: Whenever asked to visualize, analyze, or plot data, you MUST generate an interactive chart using `plotly.express` and store the final figure in a variable named `fig`. Do NOT manually set templates, background colors, or custom fonts; the execution sandbox will automatically apply a unified dark theme. CRITICAL: Just use the `DATABASE_URI` variable directly (e.g. `engine = create_engine(DATABASE_URI)`). DO NOT use `globals().get()` or `os.getenv()` to fetch it, as it will break the sandbox.",
                 "parameters": {
                     "type": "object",
                     "properties": {

@@ -103,8 +103,8 @@ async def execute_code(request: ExecuteRequest):
     f = io.StringIO()
     with redirect_stdout(f):
         try:
-            # 运行代码
-            exec(code, {}, local_vars)
+            # 运行代码。将 local_vars 同时传给 globals 和 locals，防止大模型使用 globals() 找不到变量
+            exec(code, local_vars, local_vars)
             
             # 2. 尝试从本地变量里捕获 Plotly 图像
             fig_to_render = local_vars.get("__captured_fig") or local_vars.get("fig")
