@@ -33,7 +33,7 @@ async def health_check():
     return {"status": "ok", "message": "FastAPI is running"}
 
 @app.get("/api/schema")
-async def get_schema(db_uri: str = None):
+def get_schema(db_uri: str = None):
     try:
         # Default fallback for testing
         uri = db_uri or os.getenv("DATABASE_URL", "sqlite:///examples/databases/company.db")
@@ -45,7 +45,7 @@ async def get_schema(db_uri: str = None):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/chat")
-async def chat(request: ChatRequest):
+def chat(request: ChatRequest):
     """
     Standard chat endpoint (Returns full JSON at the end, not streaming).
     For streaming, you'd typically implement an AsyncGenerator with EventSourceResponse,
@@ -83,7 +83,7 @@ class ExecuteRequest(BaseModel):
     code: str
 
 @app.post("/api/execute")
-async def execute_code(request: ExecuteRequest):
+def execute_code(request: ExecuteRequest):
     import io
     import traceback
     from contextlib import redirect_stdout
