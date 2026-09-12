@@ -33,7 +33,7 @@ export default function Home() {
     setRenderError("");
     setRenderHtml("");
     try {
-      const res = await fetch("http://localhost:8000/api/execute", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/execute`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code: activeCode }),
@@ -59,7 +59,7 @@ export default function Home() {
   }, [messages]);
 
   useEffect(() => {
-    fetch("http://localhost:8000/api/schema")
+    fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/schema`)
       .then((res) => res.json())
       .then((data) => {
         try {
@@ -81,7 +81,7 @@ export default function Home() {
     setLoading(true);
 
     try {
-      const res = await fetch("http://localhost:8000/api/chat", {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ session_id: sessionId, message: text }),
