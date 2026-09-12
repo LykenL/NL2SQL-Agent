@@ -95,6 +95,8 @@ async def execute_code(request: ExecuteRequest):
     
     # 连接当前数据库
     uri = os.getenv("DATABASE_URL", "sqlite:///examples/databases/company.db")
+    if uri and uri.startswith("postgres://"):
+        uri = uri.replace("postgres://", "postgresql://", 1)
     local_vars = {"DATABASE_URI": uri, "db_uri": uri}
     
     output_html = ""
