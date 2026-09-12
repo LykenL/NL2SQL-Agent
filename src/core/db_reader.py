@@ -67,9 +67,14 @@ def extract_db_schema(db_path: str = "sqlite:///company.db", force_refresh: bool
         _schema_cache[db_path] = result
         _schema_cache_timestamp[db_path] = time.time()
         
+        engine.dispose()
         return result
         
     except Exception as e:
+        try:
+            engine.dispose()
+        except:
+            pass
         return f"Error extracting schema: {e}"
 
 # test part
