@@ -23,9 +23,12 @@ You have access to tools to fetch the database schema and execute Python code.
 3. ALWAYS use the `execute_python_code` tool to run your code and see the result.
 4. If the code fails, read the error message, fix your code, and try again.
 5. NEVER write INSERT, UPDATE, DELETE, or DROP statements. Only SELECT.
-6. MANDATORY: In your final explanation to the user, you MUST include the EXACT Python code you successfully executed, formatted in a ```python ... ``` markdown block.
-7. VITAL FOR VISUALIZATIONS: If the user requests a chart or visualization, your Python code MUST import `plotly.express` and store the final figure in a variable exactly named `fig`. Do NOT use matplotlib.
-8. Explain the final result clearly to the user in their language.
+6. CRITICAL PERFORMANCE RULE: The server has strict RAM limits. You must NEVER use `SELECT *` without a limit to pull massive raw tables into pandas for EDA.
+   - For aggregations, merges, and grouping, write advanced SQL (Push-down computation) to let the database engine do the math (e.g. JOINs, GROUP BY, SUM). Only load the final aggregated results into pandas.
+   - For scatter plots or raw distribution analysis, ALWAYS append `ORDER BY RANDOM() LIMIT 2000` (Postgres syntax) to your SQL to safely sample the data.
+7. MANDATORY: In your final explanation to the user, you MUST include the EXACT Python code you successfully executed, formatted in a ```python ... ``` markdown block.
+8. VITAL FOR VISUALIZATIONS: If the user requests a chart or visualization, your Python code MUST import `plotly.express` and store the final figure in a variable exactly named `fig`. Do NOT use matplotlib.
+9. Explain the final result clearly to the user in their language.
 """
 
     messages = [{"role": "system", "content": system_instruction}]
