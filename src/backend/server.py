@@ -13,9 +13,9 @@ from src.core.db_reader import extract_db_schema
 from src.core.agent_loop import run_agent_loop
 from src.core.agent_tools import create_agent_tools
 
-fastapi_app = FastAPI(title="Data Copilot API (V2)")
+app = FastAPI(title="Data Copilot API (V2)")
 
-fastapi_app.add_middleware(
+app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
@@ -28,11 +28,11 @@ class ChatRequest(BaseModel):
     message: str
     db_uri: str = None
 
-@fastapi_app.get("/api/health")
+@app.get("/api/health")
 async def health_check():
     return {"status": "ok", "message": "FastAPI is running"}
 
-@fastapi_app.get("/api/schema")
+@app.get("/api/schema")
 def get_schema(db_uri: str = None):
     try:
         # Default fallback for testing
@@ -44,7 +44,7 @@ def get_schema(db_uri: str = None):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@fastapi_app.post("/api/chat")
+@app.post("/api/chat")
 def chat(request: ChatRequest):
     """
     Standard chat endpoint (Returns full JSON at the end, not streaming).
@@ -74,7 +74,7 @@ def chat(request: ChatRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@fastapi_app.get("/api/sessions")
+@app.get("/api/sessions")
 async def list_sessions():
     memory = SQLiteMemory()
     return {"sessions": memory.get_all_sessions()}
@@ -82,7 +82,7 @@ async def list_sessions():
 class ExecuteRequest(BaseModel):
     code: str
 
-@fastapi_app.post("/api/execute")
+@app.post("/api/execute")
 def execute_code(request: ExecuteRequest):
     import io
     import traceback
