@@ -37,6 +37,8 @@ async def get_schema(db_uri: str = None):
     try:
         # Default fallback for testing
         uri = db_uri or os.getenv("DATABASE_URL", "sqlite:///examples/databases/company.db")
+        if uri and uri.startswith("postgres://"):
+            uri = uri.replace("postgres://", "postgresql://", 1)
         schema_text = extract_db_schema(uri)
         return {"schema": schema_text}
     except Exception as e:
@@ -50,6 +52,8 @@ async def chat(request: ChatRequest):
     but here we wrap the standard agent_loop.
     """
     uri = request.db_uri or os.getenv("DATABASE_URL", "sqlite:///examples/databases/company.db")
+    if uri and uri.startswith("postgres://"):
+        uri = uri.replace("postgres://", "postgresql://", 1)
     tools, tool_map = create_agent_tools(uri)
     
     # Run the agent (this is synchronous and will block; for a real production app, run in thread/async)
