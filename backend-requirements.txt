@@ -5,6 +5,7 @@ sqlalchemy>=2.0.0
 chromadb
 streamlit
 plotly
+altair>=5.0.0
 psycopg2-binary
 pymysql
 

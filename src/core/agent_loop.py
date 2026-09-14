@@ -23,11 +23,51 @@ You have access to tools to fetch the database schema and execute Python code.
 3. ALWAYS use the `execute_python_code` tool to run your code and see the result.
 4. If the code fails, read the error message, fix your code, and try again.
 5. NEVER write INSERT, UPDATE, DELETE, or DROP statements. Only SELECT.
-6. CRITICAL PERFORMANCE RULE: The server has strict RAM limits. You must NEVER use `SELECT *` without a limit to pull massive raw tables into pandas for EDA.
-   - For aggregations, merges, and grouping, write advanced SQL (Push-down computation) to let the database engine do the math (e.g. JOINs, GROUP BY, SUM). Only load the final aggregated results into pandas.
-   - For scatter plots or raw distribution analysis, ALWAYS append `ORDER BY RANDOM() LIMIT 2000` (Postgres syntax) to your SQL to safely sample the data.
-7. MANDATORY: In your final explanation to the user, you MUST include the EXACT Python code you successfully executed, formatted in a ```python ... ``` markdown block.
-8. VITAL FOR VISUALIZATIONS: If the user requests a chart or visualization, your Python code MUST import `plotly.express` and store the final figure in a variable exactly named `fig`. Do NOT use matplotlib.
+6. CRITICAL PERFORMANCE RULE: The server has strict RAM limits. You must NEVER use `SELECT *` without a limit.
+   - For aggregations, merges, and grouping, write advanced SQL (Push-down computation) using JOINs, GROUP BY, SUM. Only load final aggregated results into pandas.
+   - For scatter plots or raw distribution analysis, ALWAYS append `ORDER BY RANDOM() LIMIT 2000` to safely sample.
+7. MANDATORY: In your final explanation, include the EXACT Python code you executed in a ```python ... ``` markdown block.
+8. VITAL FOR VISUALIZATIONS — choose the right library for the chart type:
+
+   A) For bar, line, scatter, pie, funnel charts → use `plotly.graph_objects` (NOT plotly.express).
+      Store the figure in a variable named `fig`. Use professional styling:
+      ```python
+      import plotly.graph_objects as go
+      fig = go.Figure()
+      fig.add_trace(go.Bar(
+          x=df['category'], y=df['value'],
+          marker=dict(color='#8b5cf6', line=dict(width=0)),
+          name='Revenue', text=df['value'], textposition='outside',
+      ))
+      fig.update_layout(
+          title=dict(text='Title Here', font=dict(size=16, color='#f3f4f6')),
+          bargap=0.25,
+          xaxis=dict(showgrid=False, tickfont=dict(size=12)),
+          yaxis=dict(gridcolor='rgba(255,255,255,0.08)', zeroline=False),
+          hoverlabel=dict(bgcolor='#1f2937', font_size=13),
+          showlegend=True,
+      )
+      ```
+
+   B) For heatmaps, distributions, correlation matrices, faceted multi-panel layouts,
+      statistical charts (boxplot, violin, histogram with KDE) → use `altair`.
+      Store the chart in a variable named `chart`. Example:
+      ```python
+      import altair as alt
+      chart = alt.Chart(df).mark_bar(
+          cornerRadiusTopLeft=5, cornerRadiusTopRight=5
+      ).encode(
+          x=alt.X('month:O', title='Month', sort='-y'),
+          y=alt.Y('revenue:Q', title='Revenue ($)'),
+          color=alt.Color('category:N', scale=alt.Scale(scheme='viridis')),
+          tooltip=['month:O', 'category:N', alt.Tooltip('revenue:Q', format=',.0f')],
+      ).properties(width='container', height=360, title='Revenue by Month & Category')
+      ```
+
+   C) Do NOT use matplotlib, seaborn, or plotly.express.
+   D) Do NOT manually set dark themes, background colors, or font colors —
+      the execution sandbox automatically injects a unified dark theme.
+
 9. Explain the final result clearly to the user in their language.
 """
 

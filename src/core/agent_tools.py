@@ -38,7 +38,17 @@ def create_agent_tools(db_uri: str) -> tuple:
             "type": "function",
             "function": {
                 "name": "execute_python_code",
-                "description": "Executes Python code locally and returns the standard output or error tracebacks. The code automatically has a global variable named `DATABASE_URI` injected. Use pandas and SQLAlchemy. IMPORTANT: Whenever asked to visualize, analyze, or plot data, you MUST generate an interactive chart using `plotly.express` and store the final figure in a variable named `fig`. Do NOT manually set templates, background colors, or custom fonts; the execution sandbox will automatically apply a unified dark theme. CRITICAL: Just use the `DATABASE_URI` variable directly (e.g. `engine = create_engine(DATABASE_URI)`). DO NOT use `globals().get()` or `os.getenv()` to fetch it, as it will break the sandbox.",
+                "description": (
+                    "Executes Python code locally and returns stdout or error tracebacks. "
+                    "The code has `DATABASE_URI` injected as a global variable. Use pandas and SQLAlchemy for data access. "
+                    "VISUALIZATION RULES: "
+                    "(1) For bar/line/scatter/pie/funnel charts: use `plotly.graph_objects` and store the figure in a variable named `fig`. "
+                    "(2) For heatmaps, distributions, correlation matrices, boxplots, violin plots, faceted layouts: use `altair` and store the chart in a variable named `chart`. "
+                    "Do NOT use plotly.express, matplotlib, or seaborn. "
+                    "Do NOT manually set dark themes — the sandbox auto-applies a unified dark theme. "
+                    "CRITICAL: Use `DATABASE_URI` directly (e.g. `engine = create_engine(DATABASE_URI)`). "
+                    "Do NOT use `globals().get()` or `os.getenv()` to fetch it."
+                ),
                 "parameters": {
                     "type": "object",
                     "properties": {
