@@ -43,9 +43,11 @@ type ConnStatus = "none" | "connecting" | "ok" | "error";
 function DbConnectModal({
   onConnect,
   onClose,
+  onSkip,
 }: {
   onConnect: (uri: string, label: string) => void;
   onClose: () => void;
+  onSkip: () => void;
 }) {
   const [tab, setTab] = useState<"upload" | "url">("upload");
   const [uriInput, setUriInput] = useState("");
@@ -256,12 +258,15 @@ function DbConnectModal({
           )}
 
           {/* Skip */}
-          <div className="text-center pt-1">
+          <div className="pt-1 border-t border-white/5">
             <button
-              onClick={onClose}
-              className="text-xs text-gray-600 hover:text-gray-400 transition-colors"
+              onClick={onSkip}
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm text-gray-400 hover:text-gray-200 border border-white/8 hover:border-white/20 hover:bg-white/5 transition-all"
             >
-              Skip — use default database
+              <span>Try with sample database</span>
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-500/15 text-indigo-400 border border-indigo-500/20">
+                Neon PostgreSQL demo
+              </span>
             </button>
           </div>
         </div>
@@ -327,6 +332,14 @@ export default function Home() {
     setRenderHtml("");
     setRenderError("");
     loadSchema(uri);
+  };
+
+  // ── Skip: use default DB (schema already loading on mount) ─────────────
+  const handleSkip = () => {
+    setDbUri("");
+    setDbLabel("Sample DB");
+    setDbConnected("ok");
+    setShowDbModal(false);
   };
 
   // ── Execute code (right pane) ───────────────────────────────────────────
@@ -419,6 +432,7 @@ export default function Home() {
         <DbConnectModal
           onConnect={handleConnect}
           onClose={() => setShowDbModal(false)}
+          onSkip={handleSkip}
         />
       )}
 
