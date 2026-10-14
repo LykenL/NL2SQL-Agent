@@ -1,4 +1,3 @@
-import time
 import json
 from src.core.db_reader import extract_db_schema
 from src.core.executor import safe_execute
@@ -8,9 +7,11 @@ def create_agent_tools(db_uri: str) -> tuple:
         return extract_db_schema(db_uri, force_refresh=force_refresh)
     
     def execute_python_code(code_string: str) -> str:
-        print("\n[Tool execution] execute_python_code called. Pacing for rate limits (4s)...")
-        time.sleep(4)
-        output = safe_execute(code_string, custom_globals={"db_uri": db_uri})
+        print("\n[Tool execution] execute_python_code called.")
+        output = safe_execute(
+            code_string,
+            custom_globals={"db_uri": db_uri, "DATABASE_URI": db_uri},
+        )
         if "❌" not in output:
             directive = "\n\n[SYSTEM DIRECTIVE]: Execution successful. Keep your final text response extremely concise and DO NOT repeat the raw code in the chat."
             return output + directive
