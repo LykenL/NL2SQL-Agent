@@ -448,16 +448,24 @@ export default function Home() {
         </div>
 
         <div className="flex items-center gap-3 text-xs font-medium">
-          {/* DB status pill — click to reopen modal */}
+          {/* DB status pill — always visible, click to open modal */}
           <button
             onClick={() => setShowDbModal(true)}
-            title="Click to change database"
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all hover:opacity-80 ${dbPillClass}`}
+            title="Click to connect or change database"
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all hover:opacity-80 ${
+              dbConnected === "ok"
+                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                : "bg-indigo-500/15 border-indigo-500/40 text-indigo-300 animate-pulse"
+            }`}
           >
-            <div className={`w-2 h-2 rounded-full ${dbDotClass}`} />
+            <div className={`w-2 h-2 rounded-full ${
+              dbConnected === "ok"
+                ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]"
+                : "bg-indigo-400 shadow-[0_0_6px_rgba(99,102,241,0.8)]"
+            }`} />
             <Database className="w-3.5 h-3.5" />
             <span className="max-w-[180px] truncate">
-              {dbConnected === "ok" ? dbLabel : "No DB selected"}
+              {dbConnected === "ok" ? dbLabel : "Connect DB"}
             </span>
           </button>
 
@@ -540,10 +548,23 @@ export default function Home() {
                   <p className="text-gray-500 text-sm max-w-sm font-medium leading-relaxed">
                     {dbConnected === "ok"
                       ? `Connected to ${dbLabel}. Ask me anything about your data.`
-                      : "Connect a database above, or ask about the default database."}
+                      : "Connect your own database, or try with the built-in sample data."}
                   </p>
                 </div>
-                <div className="flex flex-wrap justify-center gap-3 max-w-md pt-4">
+
+                {/* Connect DB CTA — shown when no DB is connected */}
+                {dbConnected !== "ok" && (
+                  <button
+                    onClick={() => setShowDbModal(true)}
+                    className="flex items-center gap-3 px-6 py-3.5 rounded-2xl bg-indigo-600/20 hover:bg-indigo-600/35 border border-indigo-500/40 hover:border-indigo-500/70 text-indigo-300 hover:text-indigo-200 transition-all shadow-[0_0_20px_rgba(99,102,241,0.15)] hover:shadow-[0_0_28px_rgba(99,102,241,0.3)] font-semibold text-sm"
+                  >
+                    <Database className="w-4 h-4" />
+                    Connect your database
+                    <ChevronRight className="w-4 h-4 opacity-60" />
+                  </button>
+                )}
+
+                <div className="flex flex-wrap justify-center gap-3 max-w-md pt-2">
                   {["Analyze Q3 Sales", "Top 5 Employees by Revenue", "Data Quality Check"].map((lbl) => (
                     <button
                       key={lbl}
