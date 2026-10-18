@@ -429,13 +429,6 @@ export default function Home() {
     }
   };
 
-  // Auto-scroll chat
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages]);
-
   // ── Send message ────────────────────────────────────────────────────────
   const sendMessage = async (overrideInput?: string) => {
     const text = overrideInput || input;

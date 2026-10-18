@@ -249,21 +249,34 @@ def execute_code(request: ExecuteRequest):
                             zerolinecolor="rgba(255,255,255,0.06)",
                         ),
                     )
-                    # Polish traces: semi-transparent rounded bars, smooth spline lines
+                    # Force-override traces: semi-transparent bars (opacity=0.65) + high-contrast vivid coral line (#ff7a00)
                     if hasattr(fig_to_render, "data") and len(fig_to_render.data) > 0:
-                        fig_to_render.update_traces(
-                            opacity=0.75,
-                            marker=dict(line=dict(width=0), cornerradius=8),
-                            selector=dict(type="bar")
-                        )
-                        fig_to_render.update_traces(
-                            line=dict(shape="spline", width=3.5),
-                            selector=dict(type="scatter")
-                        )
-                        fig_to_render.update_traces(
-                            marker=dict(line=dict(width=0)),
-                            selector=dict(type="pie")
-                        )
+                        for trace in fig_to_render.data:
+                            trace_type = getattr(trace, "type", "")
+                            if trace_type == "bar":
+                                trace.opacity = 0.65
+                                if hasattr(trace, "marker") and trace.marker:
+                                    trace.marker.cornerradius = 8
+                                    trace.marker.line = dict(width=0)
+                            elif trace_type == "scatter":
+                                # Force line color to high-contrast complementary coral
+                                if hasattr(trace, "line") and trace.line:
+                                    trace.line.color = "#ff7a00"
+                                    trace.line.width = 3.5
+                                    trace.line.shape = "spline"
+                                else:
+                                    trace.line = dict(color="#ff7a00", width=3.5, shape="spline")
+                                # Force prominent white markers with coral border
+                                trace.marker = dict(size=8, color="#ffffff", line=dict(color="#ff7a00", width=2.5))
+                            elif trace_type == "pie":
+                                if hasattr(trace, "marker") and trace.marker:
+                                    trace.marker.line = dict(width=0)
+
+                        # Also sync any annotations arrow & border to coral
+                        if hasattr(fig_to_render.layout, "annotations") and fig_to_render.layout.annotations:
+                            for ann in fig_to_render.layout.annotations:
+                                ann.arrowcolor = "#ff7a00"
+                                ann.bordercolor = "#ff7a00"
                 except Exception:
                     pass
 
