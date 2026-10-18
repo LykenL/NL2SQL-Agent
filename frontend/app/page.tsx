@@ -26,16 +26,47 @@ import {
   ChevronRight,
   HardDrive,
   X,
+  GripVertical,
 } from "lucide-react";
+import {
+  Panel,
+  Group as PanelGroup,
+  Separator as PanelResizeHandle,
+} from "react-resizable-panels";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL ||
-  (process.env.NODE_ENV === "development"
-    ? "http://localhost:8000"
-    : "https://nl2sql-agent-0hwl.onrender.com");
+// Resolve the API base at RUNTIME from the browser's own hostname, never from
+// build-time NODE_ENV. A NEXT_PUBLIC_* var is statically inlined at build time,
+// so a stray localhost value in the Vercel dashboard silently ships to real
+// users. Runtime detection makes that class of misconfiguration impossible.
+const DEFAULT_API = "https://nl2sql-agent-0hwl.onrender.com";
+
+function resolveApiBase(): string {
+  // 1. Explicit override wins — but never let a localhost value escape into a
+  //    non-local page, which is exactly the bug this guards against.
+  const envUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
+  if (envUrl) {
+    const isLocalEnv =
+      /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/i.test(envUrl);
+    const isLocalPage =
+      typeof window !== "undefined" &&
+      /^(localhost|127\.0\.0\.1|\[::1\])$/i.test(window.location.hostname);
+    if (!isLocalEnv || isLocalPage) return envUrl.replace(/\/+$/, "");
+  }
+  // 2. Running on this machine → local backend.
+  if (
+    typeof window !== "undefined" &&
+    /^(localhost|127\.0\.0\.1|\[::1\])$/i.test(window.location.hostname)
+  ) {
+    return "http://localhost:8000";
+  }
+  // 3. Deployed → the hosted backend.
+  return DEFAULT_API;
+}
+
+const API_BASE = resolveApiBase();
 
 type ConnStatus = "none" | "connecting" | "ok" | "error";
 
@@ -303,16 +334,47 @@ export default function Home() {
     const url = uri
       ? `${API_BASE}/api/schema?db_uri=${encodeURIComponent(uri)}`
       : `${API_BASE}/api/schema`;
-    fetch(url)
-      .then((res) => res.json())
-      .then((data) => {
+
+    // Render's free tier sleeps after ~15min idle and needs ~50s to wake, and a
+    // cold fetch is indistinguishable from a dead server. Retry a couple of
+    // times before surfacing an error, and always report WHAT failed.
+    const attempt = async (triesLeft: number): Promise<void> => {
+      try {
+        const res = await fetch(url);
+        if (!res.ok) {
+          // Non-2xx: the body is often a plain-text or HTML error page, not JSON.
+          const body = await res.text().catch(() => "");
+          throw new Error(
+            `HTTP ${res.status} ${res.statusText}` +
+              (body ? ` — ${body.slice(0, 200)}` : "")
+          );
+        }
+        const data = await res.json();
         try {
           setSchemaObj(JSON.parse(data.schema));
         } catch {
           setSchemaText(data.schema || "No schema found");
         }
-      })
-      .catch(() => setSchemaText("Failed to load schema. Is the API running?"));
+      } catch (err: any) {
+        // A 5xx / timeout may just be the backend waking up — give it a retry.
+        const msg: string = err?.message || String(err);
+        const isTransient =
+          /HTTP 5\d\d|Failed to fetch|NetworkError|timed out|timeout/i.test(msg);
+        if (triesLeft > 0 && isTransient) {
+          setSchemaText(`Connecting to backend… (retrying)`);
+          await new Promise((r) => setTimeout(r, 3000));
+          return attempt(triesLeft - 1);
+        }
+        // Refused / DNS / offline arrive as a TypeError with an empty message.
+        const detail =
+          /Failed to fetch|NetworkError|Load failed/i.test(msg) || !msg
+            ? "could not reach the server"
+            : msg;
+        setSchemaText(`Failed to load schema: ${detail}\nAPI: ${url}`);
+      }
+    };
+
+    attempt(2);
   }, []);
 
   // Initial schema load (default DB)
@@ -476,11 +538,11 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Main 3-Pane Layout */}
+      {/* Main 3-Pane Resizable Layout */}
       <main className="flex-1 min-h-0 w-full flex overflow-hidden">
-
-        {/* Left Pane: Schema (25%) */}
-        <aside className="w-1/4 border-r border-white/10 bg-[#0a0a0a] flex flex-col hidden lg:flex shadow-2xl z-20 min-h-0">
+        <PanelGroup orientation="horizontal" className="h-full w-full">
+          {/* Left Pane: Schema (Data Context) */}
+          <Panel defaultSize={22} minSize={18} id="schema-panel" className="flex flex-col min-h-0 bg-[#0a0a0a] shadow-2xl z-20">
           <div className="p-4 border-b border-white/10 flex items-center justify-between bg-[#121212] shrink-0">
             <div className="flex items-center gap-2">
               <Database className="w-4 h-4 text-indigo-400" />
@@ -533,10 +595,18 @@ export default function Home() {
               )}
             </div>
           </ScrollArea>
-        </aside>
+          </Panel>
 
-        {/* Center Pane: Chat (45%) */}
-        <section className="flex-1 lg:w-[45%] flex flex-col bg-[#050505] relative z-10">
+          {/* Resizer 1 (Left / Center) */}
+          <PanelResizeHandle className="w-1.5 bg-[#0a0a0a] hover:bg-indigo-500/30 active:bg-indigo-500 transition-colors relative flex items-center justify-center cursor-col-resize group z-30">
+            <div className="w-[1px] h-full bg-white/10 group-hover:bg-indigo-500/50 transition-colors" />
+            <div className="absolute w-4 h-7 rounded-full bg-[#161616] border border-white/20 group-hover:border-indigo-400 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md pointer-events-none">
+              <GripVertical className="w-2.5 h-2.5 text-gray-400 group-hover:text-indigo-300" />
+            </div>
+          </PanelResizeHandle>
+
+          {/* Center Pane: Chat */}
+          <Panel defaultSize={46} minSize={25} id="chat-panel" className="flex flex-col min-h-0 bg-[#050505] relative z-10">
           <div className="flex-1 overflow-y-auto p-6 space-y-6 scroll-smooth" ref={scrollRef}>
             {messages.length === 0 && (
               <div className="h-full flex flex-col items-center justify-center text-center space-y-6 opacity-0 animate-in fade-in duration-1000">
@@ -628,10 +698,18 @@ export default function Home() {
               </button>
             </div>
           </div>
-        </section>
+          </Panel>
 
-        {/* Right Pane: Code & Render (30%) */}
-        <aside className="w-[30%] border-l border-white/10 bg-[#0a0a0a] flex flex-col hidden xl:flex shadow-2xl z-20">
+          {/* Resizer 2 (Center / Right) */}
+          <PanelResizeHandle className="w-1.5 bg-[#0a0a0a] hover:bg-purple-500/30 active:bg-purple-500 transition-colors relative flex items-center justify-center cursor-col-resize group z-30">
+            <div className="w-[1px] h-full bg-white/10 group-hover:bg-purple-500/50 transition-colors" />
+            <div className="absolute w-4 h-7 rounded-full bg-[#161616] border border-white/20 group-hover:border-purple-400 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md pointer-events-none">
+              <GripVertical className="w-2.5 h-2.5 text-gray-400 group-hover:text-purple-300" />
+            </div>
+          </PanelResizeHandle>
+
+          {/* Right Pane: Code & Render */}
+          <Panel defaultSize={32} minSize={20} id="code-panel" className="flex flex-col min-h-0 bg-[#0a0a0a] shadow-2xl z-20">
           <Tabs defaultValue="code" className="flex-1 flex flex-col h-full">
             <div className="p-4 border-b border-white/10 bg-[#121212]">
               <TabsList className="w-full bg-black/50 border border-white/5 p-1.5 rounded-xl h-auto">
@@ -718,7 +796,8 @@ export default function Home() {
               )}
             </TabsContent>
           </Tabs>
-        </aside>
+          </Panel>
+        </PanelGroup>
       </main>
     </div>
   );

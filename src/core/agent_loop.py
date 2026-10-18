@@ -27,46 +27,48 @@ You have access to tools to fetch the database schema and execute Python code.
    - For aggregations, merges, and grouping, write advanced SQL (Push-down computation) using JOINs, GROUP BY, SUM. Only load final aggregated results into pandas.
    - For scatter plots or raw distribution analysis, ALWAYS append `ORDER BY RANDOM() LIMIT 2000` to safely sample.
 7. MANDATORY: In your final explanation, include the EXACT Python code you executed in a ```python ... ``` markdown block.
-8. VITAL FOR VISUALIZATIONS — choose the right library for the chart type:
+8. VITAL FOR VISUALIZATIONS — generate modern, publication-grade interactive charts:
 
-   A) For bar, line, scatter, pie, funnel charts → use `plotly.graph_objects` (NOT plotly.express).
-      Store the figure in a variable named `fig`. Use professional styling:
+   A) For bar, line, scatter, pie, funnel, dual-axis charts → use `plotly.graph_objects` (store in `fig`).
+      Aesthetic Best Practices:
+      - Bar charts: add `text=df['col']`, `texttemplate='%{text:$,.0f}'` (or appropriate format), `textposition='outside'`, clean spacing `bargap=0.3`.
+      - Line / Time-series: use smooth curves `line=dict(shape='spline', width=3)` with optional semi-transparent fill `fill='tozeroy', fillcolor='rgba(139, 92, 246, 0.12)'`.
+      - Combo / Dual-Axis: for comparing metrics of different scales (e.g. Total Sales on primary yaxis + Avg Salary on secondary yaxis via `secondary_y=True` or `yaxis2`), explicitly use `make_subplots(specs=[[{"secondary_y": True}]])`.
+      - Always give charts an informative title and clear axis labels with formatters (`tickformat="$,.0f"` or similar).
       ```python
       import plotly.graph_objects as go
       fig = go.Figure()
       fig.add_trace(go.Bar(
-          x=df['category'], y=df['value'],
-          marker=dict(color='#8b5cf6', line=dict(width=0)),
-          name='Revenue', text=df['value'], textposition='outside',
+          x=df['department'], y=df['total_sales'],
+          marker=dict(color='#8b5cf6'),
+          name='Total Sales ($)',
+          text=df['total_sales'],
+          texttemplate='$%{text:,.0f}',
+          textposition='outside'
       ))
       fig.update_layout(
-          title=dict(text='Title Here', font=dict(size=16, color='#f3f4f6')),
-          bargap=0.25,
-          xaxis=dict(showgrid=False, tickfont=dict(size=12)),
-          yaxis=dict(gridcolor='rgba(255,255,255,0.08)', zeroline=False),
-          hoverlabel=dict(bgcolor='#1f2937', font_size=13),
-          showlegend=True,
+          title=dict(text='Sales Performance by Department', font=dict(size=16)),
+          bargap=0.3,
+          showlegend=True
       )
       ```
 
-   B) For heatmaps, distributions, correlation matrices, faceted multi-panel layouts,
-      statistical charts (boxplot, violin, histogram with KDE) → use `altair`.
-      Store the chart in a variable named `chart`. Example:
+   B) For heatmaps, correlations, distributions, faceted multi-panel layouts → use `altair` (store in `chart`).
+      Example:
       ```python
       import altair as alt
       chart = alt.Chart(df).mark_bar(
-          cornerRadiusTopLeft=5, cornerRadiusTopRight=5
+          cornerRadiusTopLeft=6, cornerRadiusTopRight=6
       ).encode(
-          x=alt.X('month:O', title='Month', sort='-y'),
-          y=alt.Y('revenue:Q', title='Revenue ($)'),
-          color=alt.Color('category:N', scale=alt.Scale(scheme='viridis')),
-          tooltip=['month:O', 'category:N', alt.Tooltip('revenue:Q', format=',.0f')],
-      ).properties(width='container', height=360, title='Revenue by Month & Category')
+          x=alt.X('department:N', title='Department', sort='-y'),
+          y=alt.Y('total_sales:Q', title='Total Sales ($)'),
+          color=alt.Color('department:N', legend=None),
+          tooltip=['department:N', alt.Tooltip('total_sales:Q', format='$,.0f')],
+      ).properties(width='container', height=380, title='Department Performance')
       ```
 
    C) Do NOT use matplotlib, seaborn, or plotly.express.
-   D) Do NOT manually set dark themes, background colors, or font colors —
-      the execution sandbox automatically injects a unified dark theme.
+   D) Do NOT hardcode opaque dark/black backgrounds — the sandbox automatically injects unified glassmorphic dark theming and responsiveness.
 
 9. Explain the final result clearly to the user in their language.
 """

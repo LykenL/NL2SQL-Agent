@@ -198,36 +198,58 @@ def execute_code(request: ExecuteRequest):
                         plot_bgcolor="rgba(0,0,0,0)",
                         paper_bgcolor="rgba(0,0,0,0)",
                         font=dict(
-                            family="Inter, system-ui, -apple-system, sans-serif",
-                            color="#d1d5db",
-                            size=13,
+                            family="'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+                            color="#94a3b8",
+                            size=12,
                         ),
-                        title_font=dict(size=16, color="#f3f4f6"),
-                        margin=dict(l=48, r=32, t=72, b=48),
+                        title_font=dict(
+                            size=16,
+                            color="#f8fafc",
+                            family="'Inter', -apple-system, sans-serif",
+                        ),
+                        margin=dict(l=40, r=24, t=64, b=40),
                         hovermode="x unified",
-                        hoverlabel=dict(bgcolor="#1f2937", bordercolor="#374151", font_size=13),
+                        hoverlabel=dict(
+                            bgcolor="#0f172a",
+                            bordercolor="rgba(255,255,255,0.15)",
+                            font=dict(color="#f8fafc", size=12, family="Inter, sans-serif"),
+                        ),
                         legend=dict(
-                            bgcolor="rgba(0,0,0,0)",
-                            bordercolor="rgba(255,255,255,0.1)",
+                            bgcolor="rgba(15,23,42,0.6)",
+                            bordercolor="rgba(255,255,255,0.08)",
                             borderwidth=1,
-                            font=dict(color="#9ca3af"),
+                            font=dict(color="#94a3b8", size=11),
+                            orientation="h",
+                            yanchor="bottom",
+                            y=1.02,
+                            xanchor="right",
+                            x=1,
                         ),
-                        colorway=["#8b5cf6", "#a855f7", "#6366f1", "#ec4899", "#14b8a6",
-                                  "#f59e0b", "#10b981", "#3b82f6"],
+                        colorway=[
+                            "#8b5cf6",  # Violet
+                            "#06b6d4",  # Cyan
+                            "#10b981",  # Emerald
+                            "#f59e0b",  # Amber
+                            "#ec4899",  # Pink
+                            "#3b82f6",  # Blue
+                            "#a855f7",  # Purple
+                        ],
                         xaxis=dict(
-                            gridcolor="rgba(255,255,255,0.06)",
-                            linecolor="rgba(255,255,255,0.1)",
-                            tickcolor="rgba(255,255,255,0.1)",
-                            zerolinecolor="rgba(255,255,255,0.1)",
-                        ),
-                        yaxis=dict(
-                            gridcolor="rgba(255,255,255,0.06)",
-                            linecolor="rgba(255,255,255,0.1)",
-                            tickcolor="rgba(255,255,255,0.1)",
+                            gridcolor="rgba(255,255,255,0.04)",
+                            linecolor="rgba(255,255,255,0.08)",
+                            tickcolor="rgba(255,255,255,0.08)",
+                            tickfont=dict(color="#64748b", size=11),
                             zerolinecolor="rgba(255,255,255,0.08)",
                         ),
+                        yaxis=dict(
+                            gridcolor="rgba(255,255,255,0.04)",
+                            linecolor="rgba(255,255,255,0.08)",
+                            tickcolor="rgba(255,255,255,0.08)",
+                            tickfont=dict(color="#64748b", size=11),
+                            zerolinecolor="rgba(255,255,255,0.06)",
+                        ),
                     )
-                    # Soften bar/pie edges
+                    # Polish traces: smooth curves, eliminate harsh borders
                     if hasattr(fig_to_render, "data") and len(fig_to_render.data) > 0:
                         fig_to_render.update_traces(
                             marker=dict(line=dict(width=0)), selector=dict(type="bar")
@@ -237,7 +259,51 @@ def execute_code(request: ExecuteRequest):
                         )
                 except Exception:
                     pass
-                output_html = fig_to_render.to_html(full_html=True, include_plotlyjs="cdn")
+
+                raw_plotly = fig_to_render.to_html(
+                    full_html=False,
+                    include_plotlyjs="cdn",
+                    config={
+                        "displayModeBar": "hover",
+                        "displaylogo": False,
+                        "responsive": True,
+                        "modeBarButtonsToRemove": ["lasso2d", "select2d"],
+                    },
+                )
+                output_html = f"""<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    body {{
+      background: transparent;
+      color: #f8fafc;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+      padding: 10px;
+    }}
+    .plotly-graph-div {{
+      width: 100% !important;
+      height: 100% !important;
+      min-height: 420px;
+    }}
+    .hoverlayer .hovertext {{
+      backdrop-filter: blur(8px) !important;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6) !important;
+      border-radius: 8px !important;
+    }}
+  </style>
+</head>
+<body>
+{raw_plotly}
+</body>
+</html>"""
 
             # ── 2. If no Plotly figure, try to capture an Altair Chart ───────
             if not output_html:
