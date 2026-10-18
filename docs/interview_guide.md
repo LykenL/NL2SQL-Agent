@@ -41,7 +41,7 @@ This guide is designed for Data Scientist (DS) and AI Engineer interviews. Inter
     *   **EN**: "I leveraged the LLM's 'Recency Bias'. Inside the sandbox, after returning the actual execution result, I hardcoded a **System Directive prompt injection** at the very end: `"You MUST include the exact Python code you just ran..."`. This forced the LLM to output the code block reliably."
     *   **CN**: “利用大模型的‘近因效应（Recency Bias）’。在沙盒返回真实执行结果的最后一秒，我强行追加了一段 System Directive 警告，强制它必须输出刚才跑的代码，完美解决了格式丢失问题。”
 
-### 🧨 踩坑 2：Streamlit 垃圾回收引发的 "Client Closed" (Streamlit GC vs HTTP Connections)
+### 🧨 踩坑 2（已废弃的 Streamlit 前端）：垃圾回收引发的 "Client Closed" (GC vs HTTP Connections)
 *   **Problem (问题)**: Adding `@st.cache_resource` caused frequent `Cannot send a request, as the client has been closed` errors on the UI.
 *   **Solution (解法)**: 
     *   **EN**: "I traced it to a conflict between Python's Garbage Collection (GC) and Streamlit's lifecycle. The local `genai.Client` was being destroyed after the function returned, killing the underlying HTTP connection. I fixed this by persisting the Client object into Streamlit's global `st.session_state` tree, keeping the TCP connection alive."

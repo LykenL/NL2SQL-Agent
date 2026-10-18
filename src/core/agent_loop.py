@@ -1,10 +1,37 @@
 import os
+import re
 import json
 import uuid
 import time
 from openai import OpenAI
 from src.core.memory_manager import SQLiteMemory, VectorMemory
 from src.agents.compression_agent import compress_session_memory
+
+# ── Chat-cleanliness guard ────────────────────────────────────────────────────
+# Code must live ONLY in the "Generated Script" pane. The model is told not to
+# emit fences, but models drift; this strips any fenced block that still slips
+# through so the chat bubble never shows a script.
+_CODE_FENCE_RE = re.compile(r"```[ \t]*[A-Za-z0-9_+\-]*[ \t]*\n?[\s\S]*?(?:```|\Z)")
+_CODE_LANG_RE = re.compile(r"^```[ \t]*([A-Za-z0-9_+\-]*)", re.MULTILINE)
+_CODE_HINT = "> 🧾 可执行脚本已生成，完整代码见下方 **Generated Script** 面板。"
+
+
+def strip_code_fences(text: str, hint: str = _CODE_HINT) -> str:
+    """Remove every fenced code block from a chat reply, leaving prose only."""
+    if not text:
+        return text
+    if "```" not in text:
+        return text
+
+    def _repl(match: "re.Match") -> str:
+        # Indented fences (whole block indented under a list item) still count.
+        return "\n\n" + hint + "\n\n"
+
+    cleaned = _CODE_FENCE_RE.sub(_repl, text)
+    # Collapse the blank-line runs the removal leaves behind.
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
+    return cleaned
+
 
 def run_agent_loop(user_message: str, session_id: str, tools_schema: list, tool_map: dict):
     sqlite_mem = SQLiteMemory()
@@ -26,12 +53,14 @@ You have access to tools to fetch the database schema and execute Python code.
 6. CRITICAL PERFORMANCE RULE: The server has strict RAM limits. You must NEVER use `SELECT *` without a limit.
    - For aggregations, merges, and grouping, write advanced SQL (Push-down computation) using JOINs, GROUP BY, SUM. Only load final aggregated results into pandas.
    - For scatter plots or raw distribution analysis, ALWAYS append `ORDER BY RANDOM() LIMIT 2000` to safely sample.
-7. MANDATORY RESPONSE FORMAT — You must deliver a COMPLETE two-part response:
-   - PART 1: COMPREHENSIVE FACTUAL FINDINGS (in Markdown):
+7. MANDATORY RESPONSE FORMAT — Your reply has EXACTLY ONE part:
+   - COMPREHENSIVE FACTUAL FINDINGS (in Markdown):
      Present clear, structured data answers (tables, KPI bullet points, key takeaways, specific numbers and ratios). Never give a generic or one-sentence brush-off like "Check the render pane". The user needs the detailed factual answer right here in the chat!
-   - PART 2: THE FULL EXECUTABLE SCRIPT:
-     ALWAYS append the exact, complete Python code you ran inside a ```python ... ``` block at the very end of your response. This is required so the UI can capture the code for interactive inspection.
-8. VITAL FOR VISUALIZATIONS — you must adhere to the MODERN FINTECH DARK DASHBOARD style:
+8. ZERO CODE IN YOUR REPLY — HARD RULE, NO EXCEPTIONS:
+   - NEVER output a fenced code block of any language (```python, ```sql, ```json, or a bare ```). NEVER paste, quote or reprint the script you executed, not even partially, not even "for reference", not even when the user asks for the code.
+   - The UI already captures every script you run and renders it in the "Generated Script" panel below the chat. Repeating it in chat is a formatting failure.
+   - Refer to the code only in words, e.g. "完整脚本见下方 Generated Script 面板". Prose, tables and KPI bullets only — no source code.
+9. VITAL FOR VISUALIZATIONS — you must adhere to the MODERN FINTECH DARK DASHBOARD style:
 
    A) COLOR & GEOMETRY PALETTE:
       - Primary Bars (Metrics like Volume, Headcount, Users):
@@ -116,13 +145,18 @@ You have access to tools to fetch the database schema and execute Python code.
    C) Do NOT use matplotlib, seaborn, or plotly.express.
    D) Do NOT hardcode opaque dark/black backgrounds — the sandbox automatically injects unified glassmorphic dark theming and responsiveness.
 
-9. Explain the final result clearly to the user in their language.
+10. Explain the final result clearly to the user in their language.
 """
 
     messages = [{"role": "system", "content": system_instruction}]
     history = sqlite_mem.get_recent_context(session_id, limit=10)
     for msg in history:
-        messages.append({"role": msg["role"], "content": msg["content"]})
+        # Old rows were stored before the no-code rule existed; never replay a
+        # script back into the context, otherwise the model imitates it.
+        content = msg["content"]
+        if msg["role"] in ("assistant", "model"):
+            content = strip_code_fences(content)
+        messages.append({"role": msg["role"], "content": content})
         
     recalled_memories = vector_mem.search_memory(user_message, n_results=1)
     
@@ -147,7 +181,7 @@ You have access to tools to fetch the database schema and execute Python code.
         if iteration == max_iterations - 1:
             messages.append({
                 "role": "user",
-                "content": "CRITICAL: You have ONE turn left. Summarize your factual data findings and conclusion in clear Markdown tables and bullet points. Include the full Python code you executed."
+                "content": "CRITICAL: You have ONE turn left. Summarize your factual data findings and conclusion in clear Markdown tables and bullet points. Do NOT include any code, code fences or the script itself — the UI renders it in the Generated Script panel."
             })
             
         response = client.chat.completions.create(
@@ -181,23 +215,27 @@ You have access to tools to fetch the database schema and execute Python code.
         else:
             break
             
-    final_text = (msg.content or "")
+    raw_text = (msg.content or "")
     if iteration >= max_iterations:
-        final_text += "\n\n⚠️ **System Warning:** Hard execution limit reached."
-        
-    sqlite_mem.add_message(session_id, "assistant", final_text)
-    
-    # Extract python code block for the render pane if present
-    import re
-    match = re.search(r'```(?:python|sql)([\s\S]*?)```', final_text, re.IGNORECASE)
-    if match:
-        code_in_text = match.group(1).strip()
-        if code_in_text:
-            last_executed_code = code_in_text
+        raw_text += "\n\n⚠️ **System Warning:** Hard execution limit reached."
 
-    final_text = final_text.strip()
+    # Harvest the code from the raw reply FIRST, then scrub the reply so the
+    # chat bubble is prose-only. The script that actually ran in the sandbox
+    # always wins; a fenced block in the prose is only a fallback for turns
+    # where no tool call was made.
+    if not last_executed_code:
+        for _m in re.finditer(r'```(?:python|sql)([\s\S]*?)```', raw_text, re.IGNORECASE):
+            _candidate = _m.group(1).strip()
+            if _candidate:
+                last_executed_code = _candidate
+
+    final_text = strip_code_fences(raw_text)
     if not final_text:
-        final_text = "Analysis completed successfully. Review the structured findings and interactive dashboard below."
+        final_text = "分析已完成，完整脚本见下方 **Generated Script** 面板。"
+
+    # Persist the scrubbed version so history replay can never re-teach the model
+    # to paste code into the chat.
+    sqlite_mem.add_message(session_id, "assistant", final_text)
     
     exec_time = time.time() - start_time
     

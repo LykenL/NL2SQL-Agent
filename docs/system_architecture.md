@@ -8,8 +8,8 @@
 
 整个项目遵循松耦合、高内聚的设计原则，主要划分为以下四个核心大类：
 
-1. **Frontend / UI 层 (`app.py`)**
-   * 负责状态管理 (State Management)、历史记录渲染与双轨执行模式 ("Execute" vs "Preview") 路由。
+1. **Frontend / UI 层 (`frontend/` + `src/backend/server.py`)**
+   * Next.js 单页应用负责会话列表、Markdown 报告渲染、**Generated Script** 面板与图表画布；FastAPI 负责会话 API、数据库上传、`/api/execute` 渲染管线。
 2. **Agent / 调度层 (`agent_loop.py`, `agent_tools.py`)**
    * 定义了大模型的 System Prompt，注册了 `get_database_schema` 和 `execute_python_code` 工具，负责处理 Tool Calling 闭环与限流。
 3. **Sandbox / 执行层 (`executor.py`, `db_reader.py`)**
@@ -26,15 +26,17 @@
 ```mermaid
 sequenceDiagram
     participant User
-    participant Streamlit UI (app.py)
+    participant Next.js UI (frontend)
+    participant FastAPI (server.py)
     participant SQLite (Memory)
     participant Gemini Agent (Main LLM)
     participant Sandbox (agent_tools)
     participant Database
 
-    User->>Streamlit UI: 输入自然语言 "查一下销量最高的商品"
-    Streamlit UI->>SQLite: 存储 User Message
-    Streamlit UI->>Gemini Agent: 发送带历史记录的 Context
+    User->>Next.js UI: 输入自然语言 "查一下销量最高的商品"
+    Next.js UI->>FastAPI: POST /api/chat
+    FastAPI->>SQLite: 存储 User Message
+    FastAPI->>Gemini Agent: 发送带历史记录的 Context
     
     activate Gemini Agent
     Gemini Agent-->>Sandbox: [Tool Call] get_database_schema()
@@ -51,11 +53,14 @@ sequenceDiagram
     deactivate Sandbox
     
     Gemini Agent->>Gemini Agent: 解析结果并自我纠错 (若有报错)
-    Gemini Agent-->>Streamlit UI: 返回最终结论与 Python 代码块
+    Gemini Agent-->>FastAPI: 返回最终结论（已剔除代码块）
     deactivate Gemini Agent
     
-    Streamlit UI->>SQLite: 存储 Model Message
-    Streamlit UI->>User: 渲染 Markdown + DataFrame 表格
+    FastAPI->>SQLite: 存储 Model Message（清洗后，无代码）
+    FastAPI-->>Next.js UI: response + sql_executed
+    Next.js UI->>FastAPI: POST /api/execute（sql_executed）
+    FastAPI-->>Next.js UI: Plotly/Altair 图表 HTML
+    Next.js UI->>User: 渲染 Markdown 报告 + Generated Script + 图表
 ```
 
 ---
@@ -95,15 +100,16 @@ graph TD
 
 ```text
 data_copilot/
-├── app.py                 # 系统的总入口点，掌控 Streamlit 渲染生命周期
-├── agent_loop.py          # 控制台版本的 Agent 循环，现已作为底层逻辑被 app.py 集成
-├── agent_tools.py         # 存放提供给大模型的 Native Tools (带 4s 令牌限流保护)
-├── executor.py            # 本地代码安全沙盒，包含 stdout 劫持与危险关键词拦截
-├── db_reader.py           # 专门负责抽提目标数据库 Schema 的只读组件
-├── memory_manager.py      # SQLite 数据库的 CRUD 接口封装层
-├── compression_agent.py   # 后台独立运行的第二大模型，负责记忆降维与 ChromaDB 交互
-├── memory_episodic.db     # 本地生成的 SQLite 物理文件
-└── .streamlit/            # Streamlit 配置文件 (如暗黑模式 UI 设定)
+├── frontend/                 # Next.js UI：会话流、Generated Script 面板、图表画布
+│   └── app/page.tsx
+├── src/backend/server.py     # FastAPI：/api/chat, /api/execute, /api/upload, /api/schema
+├── src/core/agent_loop.py    # Agent 循环：工具调用闭环、上下文装配、聊天文本清洗
+├── src/core/agent_tools.py   # 提供给大模型的 Native Tools（schema + 代码执行）
+├── src/core/executor.py      # 本地代码安全沙盒：stdout 劫持 + 危险关键词拦截
+├── src/core/db_reader.py     # 目标数据库 Schema 的只读抽取组件
+├── src/core/memory_manager.py# SQLite 情景记忆的 CRUD 封装 + ChromaDB 语义记忆
+├── src/agents/compression_agent.py # 后台第二大模型：记忆降维 + ChromaDB 写入
+└── data/episodic_memory/     # 本地生成的 SQLite 物理文件
 ```
 
 ## 5. 安全防御体系 (Security Shield)

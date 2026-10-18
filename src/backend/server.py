@@ -161,12 +161,6 @@ def execute_code(request: ExecuteRequest):
 
     code = request.code
 
-    # Auto-replace Streamlit rendering calls the LLM might generate
-    code = code.replace("import streamlit as st", "")
-    code = code.replace("st.plotly_chart(", "__captured_fig = (")
-    code = code.replace("st.write(", "print(")
-    code = code.replace("st.dataframe(", "print(")
-
     # Resolve the database URI: prefer the one sent by the frontend, fall back to env
     uri = request.db_uri or os.getenv("DATABASE_URL", "sqlite:///examples/databases/company.db")
     if uri and uri.startswith("postgres://"):

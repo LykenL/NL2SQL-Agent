@@ -197,5 +197,5 @@ class VectorMemory:
                 return []
             return results["documents"][0]
 
-# For backwards compatibility with app.py
+# Alias kept for older imports
 SQLiteMemory = DatabaseMemory

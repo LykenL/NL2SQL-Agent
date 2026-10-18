@@ -2,76 +2,92 @@
 
 *A Multi-Agent, LLM-driven Cognitive Database Copilot designed to execute complex data analysis tasks across relational databases. The system seamlessly translates natural language into secure, executable Python/SQL code, evaluates its own execution results, and persists analytical insights across sessions using a custom dual-engine memory architecture.*
 
+## Stack
+
+| Layer | Technology |
+| :--- | :--- |
+| Frontend | Next.js + React + Tailwind, dark "fintech dashboard" UI (`frontend/`) |
+| API | FastAPI (`src/backend/server.py`) |
+| Agent core | OpenAI-compatible native tool calling (`src/core/agent_loop.py`) |
+| Execution | `exec()` sandbox with stdout capture (`src/core/executor.py`) |
+| Plotting | `plotly.graph_objects` (`fig`) + `altair` (`chart`) |
+| Memory | SQLite (episodic) + ChromaDB (semantic) |
+
+> The Streamlit frontend has been removed. The single supported UI is the Next.js app.
+
 ## Quick Start
 
-1. **Clone and Install Dependencies**
+1. **Install backend dependencies**
 ```bash
-git clone https://github.com/LykenL/NL2SQL-Agent.git
-cd data_copilot
-pip install -r requirements.txt
+pip install -r backend-requirements.txt
 ```
 
-2. **Set up API Key**
+2. **Configure the model endpoint**
 ```bash
-cp .env.example .env
-# Open .env and add your GEMINI_API_KEY
+cp configs/.env.example .env
+# OLLAMA_BASE_URL / OLLAMA_API_KEY point at any OpenAI-compatible server
 ```
 
-3. **Run the Copilot (Example DB)**
+3. **Run the API**
 ```bash
-python agent_loop.py sqlite:///examples/company.db
+uvicorn src.backend.server:app --reload --port 8000
 ```
 
-4. **Run the Automated Benchmarks**
+4. **Run the frontend**
 ```bash
-python evaluator.py
-28: ```
-29: 
-30: ## Connecting to Custom Databases
-31: 
-32: The Copilot uses SQLAlchemy URIs to connect to databases. For SQLite databases, use the `sqlite:///` prefix.
-33: 
-34: ### 1. Using the Web UI
-35: Launch the app (`streamlit run app.py`) and enter the connection string in the **Database URI** field in the sidebar.
-36: 
-37: ### 2. Using the CLI
-38: Pass the URI as a command-line argument to `agent_loop.py`:
-39: ```bash
-40: python agent_loop.py sqlite:///path/to/your/database.db
-41: ```
-42: 
-43: ### Example: Connecting to Chinook Database
-44: To connect to the Chinook sample database located at `/Users/lykenl/Documents/local_agent/data_copilot/chroma_db/Chinook_Sqlite.sqlite`, use the following absolute URI (note the four slashes `sqlite:////` for absolute paths on Unix systems):
-45: ```text
-46: sqlite:////Users/lykenl/Documents/local_agent/data_copilot/chroma_db/Chinook_Sqlite.sqlite
-47: ```
-48: 
-49: ---
-50: 
-51: ## Technical Architecture
+cd frontend && npm install && npm run dev
+```
 
+Open http://localhost:3000 and enter a database URI in the connect dialog.
+
+5. **Run the automated benchmarks**
+```bash
+python scripts/evaluator.py
+```
+
+## Connecting to Custom Databases
+
+The Copilot uses SQLAlchemy URIs to connect to databases. For SQLite databases, use the `sqlite:///` prefix (four slashes `sqlite:////` for absolute paths on Unix systems).
+
+### 1. Using the Web UI
+Enter the connection string in the **Database URI** field of the connect dialog, or upload a `.db` / `.sqlite` / `.csv` file.
+
+### 2. Programmatically
+Call the agent loop directly with any SQLAlchemy URI:
+```python
+from src.core.agent_tools import create_agent_tools
+from src.core.agent_loop import run_agent_loop
+
+tools, tool_map = create_agent_tools("sqlite:///path/to/your/database.db")
+text, script, _, elapsed = run_agent_loop("Top 5 客户按营收排序", "session-1", tools, tool_map)
+```
+
+### Example: Connecting to Chinook Database
+```text
+sqlite:////Users/lykenl/Documents/local_agent/data_copilot/databases/Chinook_Sqlite.sqlite
+```
+
+---
+
+## Technical Architecture
 
 ### 1. Multi-Agent Execution Sandbox (Native Tool Calling)
-*   **LLM Engine**: Powered by `Google Gemini 3.5 Flash`, utilizing structured Native Tool Calling.
-*   **Agnostic Data Access**: Leveraged `SQLAlchemy` and `Pandas` to support universal connection URIs, allowing the agent to seamlessly query a wide array of SQL dialects (PostgreSQL, MySQL, SQLite) without modifying the codebase.
-*   **Secure `exec()` Sandbox**: Developed a robust local execution environment that intercepts `stdout` and injects variables dynamically. Implemented strict AST/Regex-level defense mechanisms to prevent destructive SQL operations (`DROP`, `DELETE`, `UPDATE`), ensuring 100% read-only compliance.
-*   **Prompt Injection for Tool Outputs**: Solved the classic "Function Calling Hijack" issue (where LLMs ignore system prompts after receiving successful data) by dynamically injecting "Recency Directives" into the tool's return string, forcing the LLM to output executable code blocks.
+*   **LLM Engine**: OpenAI-compatible native tool calling (Ollama / any OpenAI-compatible endpoint), configured through `OLLAMA_BASE_URL`.
+*   **Agnostic Data Access**: `SQLAlchemy` + `Pandas` support universal connection URIs, so the agent queries PostgreSQL, MySQL and SQLite without code changes.
+*   **Secure `exec()` Sandbox**: A local execution environment that intercepts `stdout`, captures every DataFrame in scope, and blocks destructive SQL (`DROP`, `DELETE`, `UPDATE`) at the AST/regex level — read-only by construction.
+*   **Script capture**: the script that actually ran is taken from the `execute_python_code` tool call and rendered in the **Generated Script** panel. Chat replies are scrubbed of code fences server-side and client-side, so code never appears in the conversation.
 
 ### 2. Dual-Engine Cognitive Memory Architecture
-Designed a decoupled memory system to handle both short-term interaction states and long-term semantic knowledge retention, significantly reducing context-window bloat and API token costs.
-
-*   **Episodic Memory (Short-Term)**: Utilized **SQLite** to log 100% of raw interactions (user queries, agent responses, and tool execution logs) within a single session.
-*   **Semantic Memory (Long-Term)**: Integrated **ChromaDB** to persist high-level logic. 
-*   **Asynchronous Compression Agent**: Implemented a secondary background LLM agent triggered upon session termination. It digests the raw SQLite logs, extracts core insights (Entities, Actions, Logic/Results), and embeds them into ChromaDB using `all-MiniLM-L6-v2`.
-*   **Contextual KNN Retrieval**: Upon launching a new session, the system automatically performs a k-Nearest Neighbors (KNN) vector search on the user's prompt against ChromaDB, successfully injecting past logical conclusions into the context window (Zero-Shot Cross-Session Recall).
+*   **Episodic Memory (Short-Term)**: **SQLite** records every user/assistant turn per session.
+*   **Semantic Memory (Long-Term)**: **ChromaDB** persists distilled logic.
+*   **Asynchronous Compression Agent**: a second background LLM agent digests raw SQLite logs, extracts entities/actions/logic, and embeds them with `all-MiniLM-L6-v2`.
+*   **Contextual KNN Retrieval**: new sessions run a KNN vector search over ChromaDB and inject the most relevant past conclusions (zero-shot cross-session recall).
 
 ## Empirical Performance & Metrics
-Built a custom **Golden Dataset Evaluation Framework** to rigorously benchmark the agent's performance in a zero-shot environment.
+Built a custom **Golden Dataset Evaluation Framework** to rigorously benchmark the agent in a zero-shot environment.
 
 | Metric | Result | Description |
 | :--- | :--- | :--- |
-| **Task Success Rate (TSR)** | **75.0%** (6/8) | Evaluated using Keyword Matching on golden dataset (simple aggregations, complex joins, trap queries, and hallucination tests). |
-| **Average Token Usage** | **1,327 Tokens** / query | Highly optimized prompt engineering and memory compression kept token consumption minimal. |
-| **Execution Cost** | **<$0.002 USD** / query | Demonstrated extreme cost-efficiency suitable for scalable enterprise deployment. |
-
-
+| **Task Success Rate (TSR)** | **75.0%** (6/8) | Keyword matching on a golden dataset (simple aggregations, complex joins, trap queries, hallucination tests). |
+| **Average Token Usage** | **1,327 Tokens** / query | Prompt engineering + memory compression kept token consumption minimal. |
+| **Execution Cost** | **<$0.002 USD** / query | Cost-efficient enough for scalable deployment. |

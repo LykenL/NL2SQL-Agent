@@ -41,11 +41,13 @@
 
 ---
 
-## 3. TCP 连接保活与状态管理 (Streamlit GC 困局)
+## 3. 状态管理与连接保活 (FastAPI + Next.js)
 
-在开发过程中我们遇到了 `Cannot send a request, as the client has been closed` 的报错。
-*   **底层原因**：在 Python 中，像 `genai.Client` 或 `httpx.Client` 这样的对象底层维护了一个 TCP 连接池 (Connection Pool)。如果这个对象在一个局部函数（比如 `reset_chat_session`）里创建，函数一旦 `return`，这个 Client 对象失去了引用计数，**Python 的垃圾回收器 (GC)** 会立刻将其销毁，从而强制发送 TCP FIN 包关闭底层网络连接。
-*   **解决方案**：Streamlit 的 `st.session_state` 是存在于服务器内存中的全局字典，其生命周期等同于用户的浏览器会话生命周期。我们将 `Client` 实例强引用挂载到 `st.session_state` 上，欺骗了 GC，使得底层 TCP 连接得以在跨页面的多次 Re-run 中保持长连接（Keep-Alive），极大地降低了建立 HTTPS 连接的握手延迟并避免了断连报错。
+早期版本用 Streamlit 做前端时，脚本每次交互都会从头重跑，内存状态随之被 GC 回收（`Cannot send a request, as the client has been closed`）。该前端已被彻底移除，当前架构把这个问题从根上绕开了：
+
+*   **状态外置**：会话状态全部落在 SQLite（`memory_manager.py`），FastAPI 的每个请求都是无状态的，前端只持有 `session_id`。没有需要跨 Re-run 保活的进程内对象，也就不存在 GC 掐断连接的问题。
+*   **连接按请求生命周期创建**：`run_agent_loop()` 每次调用新建 OpenAI-compatible 客户端，请求结束即释放，TCP 不必跨调用复用。
+*   **代码与渲染分离**：`/api/chat` 只返回文本结论和 `sql_executed`；`/api/execute` 单独在沙盒里跑脚本并回传 Plotly/Altair 的 HTML，两者互不污染，也不依赖任何前端框架的运行时状态。
 
 ---
 
@@ -54,4 +56,4 @@
 如果其他人要复刻你的项目，最难的不是调用 API，而是：
 1.  **容错性**：基于 Traceback 的自动重试机制。
 2.  **高并发限流**：工具层精确到秒的令牌桶控制（`time.sleep(4)`）。
-3.  **状态分离**：将 Web 框架的无状态性（Streamlit）与 Agent 需要的强状态性（Memory）通过数据库层优雅地桥接起来。
+3.  **状态分离**：将 Web 框架的无状态性（FastAPI）与 Agent 需要的强状态性（Memory）通过数据库层优雅地桥接起来。

@@ -306,6 +306,20 @@ function DbConnectModal({
   );
 }
 
+// ─── Chat cleanliness ─────────────────────────────────────────────────────────
+// The chat bubble must never show source code; scripts belong to the
+// "Generated Script" tab only. Applied at send time and again at render time
+// so messages loaded from older sessions are scrubbed too.
+const CODE_FENCE_RE = /```[A-Za-z0-9_+-]*\n?[\s\S]*?(?:```|$)/g;
+
+const stripCodeFences = (text: string): string => {
+  if (!text || !text.includes("```")) return text || "";
+  return text
+    .replace(CODE_FENCE_RE, "\n\n> 🧾 可执行脚本已生成，完整代码见下方 **Generated Script** 面板。\n\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+};
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function Home() {
   const [schemaObj, setSchemaObj] = useState<any>(null);
@@ -451,16 +465,20 @@ export default function Home() {
 
       const data = await res.json();
 
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: data.response || "No response" },
-      ]);
+      const raw = data.response || "No response";
 
+      // Harvest the script BEFORE scrubbing: the chat bubble is prose-only,
+      // the code belongs exclusively to the Generated Script pane.
       let codeToRun = data.sql_executed || "";
       if (!codeToRun && data.response) {
-        const match = data.response.match(/```(?:python|sql)([\s\S]*?)```/i);
+        const match = data.response.match(/```(?:python|sql)?([\s\S]*?)```/i);
         if (match) codeToRun = match[1].trim();
       }
+
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: stripCodeFences(raw) },
+      ]);
 
       if (codeToRun) {
         setActiveCode(codeToRun);
@@ -673,7 +691,7 @@ export default function Home() {
                       }`}>
                         <div className="prose prose-invert max-w-none text-[15px] prose-p:leading-relaxed prose-pre:bg-black/20 prose-pre:border prose-pre:border-white/10 prose-code:text-indigo-200">
                           <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                            {msg.content}
+                            {msg.role === "assistant" ? stripCodeFences(msg.content) : msg.content}
                           </ReactMarkdown>
                         </div>
                       </div>
