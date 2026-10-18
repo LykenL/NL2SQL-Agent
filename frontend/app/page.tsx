@@ -27,6 +27,7 @@ import {
   HardDrive,
   X,
   GripVertical,
+  GripHorizontal,
 } from "lucide-react";
 import {
   Panel,
@@ -605,197 +606,205 @@ export default function Home() {
             </div>
           </PanelResizeHandle>
 
-          {/* Center Pane: Chat */}
-          <Panel defaultSize={46} minSize={25} id="chat-panel" className="flex flex-col min-h-0 bg-[#050505] relative z-10">
-          <div className="flex-1 overflow-y-auto p-6 space-y-6 scroll-smooth" ref={scrollRef}>
-            {messages.length === 0 && (
-              <div className="h-full flex flex-col items-center justify-center text-center space-y-6 opacity-0 animate-in fade-in duration-1000">
-                <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-indigo-500/20 to-purple-500/10 border border-indigo-500/20 flex items-center justify-center shadow-[0_0_30px_rgba(99,102,241,0.15)]">
-                  <LayoutDashboard className="w-10 h-10 text-indigo-400" />
-                </div>
-                <div className="space-y-3">
-                  <h3 className="text-2xl font-black text-gray-100 tracking-tight">How can I help you?</h3>
-                  <p className="text-gray-500 text-sm max-w-sm font-medium leading-relaxed">
-                    {dbConnected === "ok"
-                      ? `Connected to ${dbLabel}. Ask me anything about your data.`
-                      : "Connect your own database, or try with the built-in sample data."}
-                  </p>
-                </div>
+          {/* Right Workspace: Vertical PanelGroup (Chat on Top, Code/Render on Bottom) */}
+          <Panel defaultSize={78} minSize={40} id="workspace-panel" className="flex flex-col min-h-0 bg-[#050505]">
+            <PanelGroup orientation="vertical" className="h-full w-full">
+              {/* Upper Section: Chat */}
+              <Panel defaultSize={52} minSize={25} id="chat-panel" className="flex flex-col min-h-0 bg-[#050505] relative z-10">
+                <div className="flex-1 overflow-y-auto p-6 space-y-6 scroll-smooth" ref={scrollRef}>
+                  {messages.length === 0 && (
+                    <div className="h-full flex flex-col items-center justify-center text-center space-y-6 opacity-0 animate-in fade-in duration-1000">
+                      <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-indigo-500/20 to-purple-500/10 border border-indigo-500/20 flex items-center justify-center shadow-[0_0_30px_rgba(99,102,241,0.15)]">
+                        <LayoutDashboard className="w-10 h-10 text-indigo-400" />
+                      </div>
+                      <div className="space-y-3">
+                        <h3 className="text-2xl font-black text-gray-100 tracking-tight">How can I help you?</h3>
+                        <p className="text-gray-500 text-sm max-w-sm font-medium leading-relaxed">
+                          {dbConnected === "ok"
+                            ? `Connected to ${dbLabel}. Ask me anything about your data.`
+                            : "Connect your own database, or try with the built-in sample data."}
+                        </p>
+                      </div>
 
-                {/* Connect DB CTA — shown when no DB is connected */}
-                {dbConnected !== "ok" && (
-                  <button
-                    onClick={() => setShowDbModal(true)}
-                    className="flex items-center gap-3 px-6 py-3.5 rounded-2xl bg-indigo-600/20 hover:bg-indigo-600/35 border border-indigo-500/40 hover:border-indigo-500/70 text-indigo-300 hover:text-indigo-200 transition-all shadow-[0_0_20px_rgba(99,102,241,0.15)] hover:shadow-[0_0_28px_rgba(99,102,241,0.3)] font-semibold text-sm"
-                  >
-                    <Database className="w-4 h-4" />
-                    Connect your database
-                    <ChevronRight className="w-4 h-4 opacity-60" />
-                  </button>
-                )}
+                      {/* Connect DB CTA — shown when no DB is connected */}
+                      {dbConnected !== "ok" && (
+                        <button
+                          onClick={() => setShowDbModal(true)}
+                          className="flex items-center gap-3 px-6 py-3.5 rounded-2xl bg-indigo-600/20 hover:bg-indigo-600/35 border border-indigo-500/40 hover:border-indigo-500/70 text-indigo-300 hover:text-indigo-200 transition-all shadow-[0_0_20px_rgba(99,102,241,0.15)] hover:shadow-[0_0_28px_rgba(99,102,241,0.3)] font-semibold text-sm"
+                        >
+                          <Database className="w-4 h-4" />
+                          Connect your database
+                          <ChevronRight className="w-4 h-4 opacity-60" />
+                        </button>
+                      )}
 
-                <div className="flex flex-wrap justify-center gap-3 max-w-md pt-2">
-                  {["Analyze Q3 Sales", "Top 5 Employees by Revenue", "Data Quality Check"].map((lbl) => (
-                    <button
-                      key={lbl}
-                      onClick={() => setInput(lbl)}
-                      className="px-5 py-2.5 rounded-xl text-xs font-semibold border border-white/10 bg-[#121212] text-gray-300 hover:bg-indigo-500/20 hover:text-indigo-200 hover:border-indigo-500/40 hover:shadow-[0_0_15px_rgba(99,102,241,0.2)] transition-all"
-                    >
-                      {lbl}
-                    </button>
+                      <div className="flex flex-wrap justify-center gap-3 max-w-md pt-2">
+                        {["Analyze Q3 Sales", "Top 5 Employees by Revenue", "Data Quality Check"].map((lbl) => (
+                          <button
+                            key={lbl}
+                            onClick={() => setInput(lbl)}
+                            className="px-5 py-2.5 rounded-xl text-xs font-semibold border border-white/10 bg-[#121212] text-gray-300 hover:bg-indigo-500/20 hover:text-indigo-200 hover:border-indigo-500/40 hover:shadow-[0_0_15px_rgba(99,102,241,0.2)] transition-all"
+                          >
+                            {lbl}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {messages.map((msg, i) => (
+                    <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} animate-in slide-in-from-bottom-2 duration-300`}>
+                      <div className={`max-w-[85%] rounded-3xl px-6 py-4 shadow-sm ${
+                        msg.role === "user"
+                          ? "bg-gradient-to-br from-indigo-600 to-indigo-800 text-white rounded-br-sm shadow-[0_4px_20px_rgba(79,70,229,0.3)]"
+                          : "bg-[#121212] text-gray-200 rounded-bl-sm border border-white/10 shadow-xl"
+                      }`}>
+                        <div className="prose prose-invert max-w-none text-[15px] prose-p:leading-relaxed prose-pre:bg-black/20 prose-pre:border prose-pre:border-white/10 prose-code:text-indigo-200">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            {msg.content}
+                          </ReactMarkdown>
+                        </div>
+                      </div>
+                    </div>
                   ))}
-                </div>
-              </div>
-            )}
 
-            {messages.map((msg, i) => (
-              <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} animate-in slide-in-from-bottom-2 duration-300`}>
-                <div className={`max-w-[85%] rounded-3xl px-6 py-4 shadow-sm ${
-                  msg.role === "user"
-                    ? "bg-gradient-to-br from-indigo-600 to-indigo-800 text-white rounded-br-sm shadow-[0_4px_20px_rgba(79,70,229,0.3)]"
-                    : "bg-[#121212] text-gray-200 rounded-bl-sm border border-white/10 shadow-xl"
-                }`}>
-                  <div className="prose prose-invert max-w-none text-[15px] prose-p:leading-relaxed prose-pre:bg-black/20 prose-pre:border prose-pre:border-white/10 prose-code:text-indigo-200">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {msg.content}
-                    </ReactMarkdown>
+                  {loading && (
+                    <div className="flex justify-start animate-in fade-in">
+                      <div className="max-w-[85%] rounded-3xl px-6 py-5 bg-[#121212] border border-white/10 rounded-bl-sm shadow-xl flex items-center gap-2.5">
+                        <div className="w-2.5 h-2.5 bg-indigo-500 rounded-full animate-bounce shadow-[0_0_8px_rgba(99,102,241,0.8)]" />
+                        <div className="w-2.5 h-2.5 bg-indigo-500 rounded-full animate-bounce delay-100 shadow-[0_0_8px_rgba(99,102,241,0.8)]" />
+                        <div className="w-2.5 h-2.5 bg-indigo-500 rounded-full animate-bounce delay-200 shadow-[0_0_8px_rgba(99,102,241,0.8)]" />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-4 bg-gradient-to-t from-[#050505] via-[#050505] to-transparent">
+                  <div className="relative group rounded-2xl bg-[#121212] border border-white/10 focus-within:border-indigo-500/60 focus-within:ring-4 focus-within:ring-indigo-500/10 transition-all overflow-hidden shadow-2xl">
+                    <Textarea
+                      className="min-h-[72px] w-full bg-transparent border-0 text-gray-100 placeholder:text-gray-600 resize-none p-4 pr-16 focus-visible:ring-0 text-[14px]"
+                      placeholder="Ask a question about your data…"
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          sendMessage();
+                        }
+                      }}
+                    />
+                    <button
+                      onClick={() => sendMessage()}
+                      disabled={loading || !input.trim()}
+                      className="absolute bottom-3 right-3 w-10 h-10 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-white/5 disabled:text-gray-700 text-white flex items-center justify-center transition-all shadow-[0_0_15px_rgba(99,102,241,0.4)] disabled:shadow-none"
+                    >
+                      <Send className="w-4 h-4 ml-0.5" />
+                    </button>
                   </div>
                 </div>
-              </div>
-            ))}
+              </Panel>
 
-            {loading && (
-              <div className="flex justify-start animate-in fade-in">
-                <div className="max-w-[85%] rounded-3xl px-6 py-5 bg-[#121212] border border-white/10 rounded-bl-sm shadow-xl flex items-center gap-2.5">
-                  <div className="w-2.5 h-2.5 bg-indigo-500 rounded-full animate-bounce shadow-[0_0_8px_rgba(99,102,241,0.8)]" />
-                  <div className="w-2.5 h-2.5 bg-indigo-500 rounded-full animate-bounce delay-100 shadow-[0_0_8px_rgba(99,102,241,0.8)]" />
-                  <div className="w-2.5 h-2.5 bg-indigo-500 rounded-full animate-bounce delay-200 shadow-[0_0_8px_rgba(99,102,241,0.8)]" />
+              {/* Horizontal Resizer between Chat & Render */}
+              <PanelResizeHandle className="h-2 bg-[#0a0a0a] hover:bg-indigo-500/30 active:bg-indigo-500 transition-colors relative flex items-center justify-center cursor-row-resize group z-30">
+                <div className="h-[1px] w-full bg-white/10 group-hover:bg-indigo-500/50 transition-colors" />
+                <div className="absolute h-4 w-12 rounded-full bg-[#161616] border border-white/20 group-hover:border-indigo-400 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md pointer-events-none">
+                  <GripHorizontal className="w-3.5 h-3.5 text-gray-400 group-hover:text-indigo-300" />
                 </div>
-              </div>
-            )}
-          </div>
+              </PanelResizeHandle>
 
-          <div className="p-5 bg-gradient-to-t from-[#050505] via-[#050505] to-transparent">
-            <div className="relative group rounded-2xl bg-[#121212] border border-white/10 focus-within:border-indigo-500/60 focus-within:ring-4 focus-within:ring-indigo-500/10 transition-all overflow-hidden shadow-2xl">
-              <Textarea
-                className="min-h-[90px] w-full bg-transparent border-0 text-gray-100 placeholder:text-gray-600 resize-none p-5 pr-20 focus-visible:ring-0 text-[15px]"
-                placeholder="Ask a question about your data…"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    sendMessage();
-                  }
-                }}
-              />
-              <button
-                onClick={() => sendMessage()}
-                disabled={loading || !input.trim()}
-                className="absolute bottom-4 right-4 w-11 h-11 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-white/5 disabled:text-gray-700 text-white flex items-center justify-center transition-all shadow-[0_0_15px_rgba(99,102,241,0.4)] disabled:shadow-none"
-              >
-                <Send className="w-5 h-5 ml-0.5" />
-              </button>
-            </div>
-          </div>
-          </Panel>
+              {/* Lower Section: Code & Render (Full Width under Chat) */}
+              <Panel defaultSize={48} minSize={25} id="code-render-panel" className="flex flex-col min-h-0 bg-[#0a0a0a] shadow-2xl z-20 border-t border-white/5">
+                <Tabs defaultValue="render" className="flex-1 flex flex-col h-full">
+                  <div className="p-3 border-b border-white/10 bg-[#121212] flex items-center justify-between">
+                    <TabsList className="bg-black/50 border border-white/5 p-1 rounded-xl h-auto">
+                      <TabsTrigger
+                        value="render"
+                        className="text-[12px] px-4 py-1.5 text-gray-400 hover:text-gray-200 data-[state=active]:bg-purple-600/20 data-[state=active]:text-purple-300 font-bold transition-all rounded-lg"
+                      >
+                        <Play className="w-3.5 h-3.5 mr-1.5" /> Live Visualization
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="code"
+                        className="text-[12px] px-4 py-1.5 text-gray-400 hover:text-gray-200 data-[state=active]:bg-indigo-600/20 data-[state=active]:text-indigo-300 font-bold transition-all rounded-lg"
+                      >
+                        <Code2 className="w-3.5 h-3.5 mr-1.5" /> Generated Script
+                      </TabsTrigger>
+                    </TabsList>
 
-          {/* Resizer 2 (Center / Right) */}
-          <PanelResizeHandle className="w-1.5 bg-[#0a0a0a] hover:bg-purple-500/30 active:bg-purple-500 transition-colors relative flex items-center justify-center cursor-col-resize group z-30">
-            <div className="w-[1px] h-full bg-white/10 group-hover:bg-purple-500/50 transition-colors" />
-            <div className="absolute w-4 h-7 rounded-full bg-[#161616] border border-white/20 group-hover:border-purple-400 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md pointer-events-none">
-              <GripVertical className="w-2.5 h-2.5 text-gray-400 group-hover:text-purple-300" />
-            </div>
-          </PanelResizeHandle>
-
-          {/* Right Pane: Code & Render */}
-          <Panel defaultSize={32} minSize={20} id="code-panel" className="flex flex-col min-h-0 bg-[#0a0a0a] shadow-2xl z-20">
-          <Tabs defaultValue="code" className="flex-1 flex flex-col h-full">
-            <div className="p-4 border-b border-white/10 bg-[#121212]">
-              <TabsList className="w-full bg-black/50 border border-white/5 p-1.5 rounded-xl h-auto">
-                <TabsTrigger
-                  value="code"
-                  className="flex-1 text-[13px] py-2 text-gray-400 hover:text-gray-200 data-[state=active]:bg-indigo-600/20 data-[state=active]:text-indigo-300 font-bold transition-all rounded-lg"
-                >
-                  <Code2 className="w-4 h-4 mr-2" /> Code
-                </TabsTrigger>
-                <TabsTrigger
-                  value="render"
-                  className="flex-1 text-[13px] py-2 text-gray-400 hover:text-gray-200 data-[state=active]:bg-purple-600/20 data-[state=active]:text-purple-300 font-bold transition-all rounded-lg"
-                >
-                  <Play className="w-4 h-4 mr-2" /> Render
-                </TabsTrigger>
-              </TabsList>
-            </div>
-
-            <TabsContent value="code" className="flex-1 p-0 m-0 overflow-hidden flex flex-col data-[state=active]:flex">
-              {activeCode ? (
-                <div className="flex-1 overflow-auto bg-[#1e1e1e]/50">
-                  <div className="flex items-center justify-between px-5 py-3 bg-[#121212] border-b border-white/5 text-xs text-gray-400 font-mono shadow-sm">
-                    <span className="flex items-center gap-2">
-                      <Terminal className="w-4 h-4 text-indigo-400" /> Generated Script.py
-                    </span>
+                    {activeCode && (
+                      <Button
+                        onClick={executeCode}
+                        disabled={rendering}
+                        size="sm"
+                        className="bg-purple-600 hover:bg-purple-500 text-white text-xs px-3 py-1.5 h-8 rounded-lg shadow-[0_0_12px_rgba(168,85,247,0.3)] font-semibold"
+                      >
+                        {rendering ? (
+                          <>
+                            <Loader2 className="w-3 h-3 mr-1.5 animate-spin" /> Rendering...
+                          </>
+                        ) : (
+                          <>
+                            <Play className="w-3 h-3 mr-1.5" /> Re-run & Render
+                          </>
+                        )}
+                      </Button>
+                    )}
                   </div>
-                  <SyntaxHighlighter
-                    language="python"
-                    style={vscDarkPlus}
-                    customStyle={{ margin: 0, padding: "1.5rem", background: "transparent", fontSize: "13px", lineHeight: "1.6" }}
-                  >
-                    {activeCode}
-                  </SyntaxHighlighter>
-                </div>
-              ) : (
-                <div className="flex-1 flex flex-col items-center justify-center text-gray-600 space-y-5 bg-[#050505]">
-                  <div className="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center border border-white/5">
-                    <Code2 className="w-10 h-10 opacity-30" />
-                  </div>
-                  <p className="text-sm font-medium">No script generated yet.</p>
-                </div>
-              )}
-            </TabsContent>
 
-            <TabsContent value="render" className="flex-1 p-8 m-0 flex flex-col data-[state=active]:flex bg-[#050505]">
-              {renderHtml ? (
-                <div className="flex-1 bg-black/10 border border-white/5 overflow-hidden rounded-xl">
-                  <iframe srcDoc={renderHtml} className="w-full h-full border-0 bg-transparent" sandbox="allow-scripts allow-popups" />
-                </div>
-              ) : renderError ? (
-                <div className="flex-1 bg-red-950/20 border border-red-500/30 rounded-xl p-4 overflow-auto text-red-400 text-xs font-mono whitespace-pre-wrap">
-                  {renderError}
-                </div>
-              ) : (
-                <div className="flex-1 rounded-2xl border-2 border-dashed border-white/10 bg-white/[0.01] flex flex-col items-center justify-center text-center p-8 space-y-6">
-                  <div className="w-16 h-16 rounded-full bg-purple-500/10 flex items-center justify-center">
-                    <Play className="w-8 h-8 text-purple-400/60" />
-                  </div>
-                  <div className="space-y-2">
-                    <h3 className="text-lg font-bold text-gray-200">Backend Execution Engine</h3>
-                    <p className="text-sm text-gray-500 leading-relaxed max-w-[250px]">
-                      Execute the generated Python code securely on the FastAPI backend and render interactive Plotly charts natively here.
-                    </p>
-                  </div>
-                  <Button
-                    onClick={executeCode}
-                    disabled={rendering || !activeCode}
-                    className="bg-purple-600/20 text-purple-300 hover:bg-purple-600/40 border border-purple-500/30 rounded-xl px-6 py-5 shadow-[0_0_15px_rgba(168,85,247,0.15)] font-bold"
-                  >
-                    {rendering ? "Executing Code…" : "Run Code & Render"}
-                  </Button>
-                </div>
-              )}
-              {(renderHtml || renderError) && (
-                <div className="mt-4 flex justify-end">
-                  <Button
-                    onClick={() => { setRenderHtml(""); setRenderError(""); }}
-                    variant="outline"
-                    className="border-white/20 text-gray-400 hover:text-white hover:bg-white/10 text-xs"
-                  >
-                    Clear Render
-                  </Button>
-                </div>
-              )}
-            </TabsContent>
-          </Tabs>
+                  <TabsContent value="render" className="flex-1 p-4 m-0 flex flex-col data-[state=active]:flex bg-[#050505] overflow-hidden">
+                    {renderHtml ? (
+                      <div className="flex-1 bg-black/20 border border-white/5 overflow-hidden rounded-xl shadow-inner">
+                        <iframe srcDoc={renderHtml} className="w-full h-full border-0 bg-transparent" sandbox="allow-scripts allow-popups" />
+                      </div>
+                    ) : renderError ? (
+                      <div className="flex-1 bg-red-950/20 border border-red-500/30 rounded-xl p-4 overflow-auto text-red-400 text-xs font-mono whitespace-pre-wrap">
+                        {renderError}
+                      </div>
+                    ) : (
+                      <div className="flex-1 rounded-2xl border border-dashed border-white/10 bg-white/[0.01] flex flex-col items-center justify-center text-center p-6 space-y-4">
+                        <div className="w-14 h-14 rounded-full bg-purple-500/10 flex items-center justify-center">
+                          <Play className="w-7 h-7 text-purple-400/60" />
+                        </div>
+                        <div className="space-y-1">
+                          <h3 className="text-base font-bold text-gray-200">Interactive Analytics Canvas</h3>
+                          <p className="text-xs text-gray-500 max-w-[340px]">
+                            Generated charts and visual KPI summaries render directly across this wide canvas.
+                          </p>
+                        </div>
+                        {activeCode && (
+                          <Button
+                            onClick={executeCode}
+                            disabled={rendering}
+                            className="bg-purple-600/20 text-purple-300 hover:bg-purple-600/40 border border-purple-500/30 rounded-xl px-5 py-2.5 text-xs font-bold"
+                          >
+                            {rendering ? "Rendering..." : "Run Code & Render"}
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </TabsContent>
+
+                  <TabsContent value="code" className="flex-1 p-0 m-0 overflow-hidden flex flex-col data-[state=active]:flex">
+                    {activeCode ? (
+                      <div className="flex-1 overflow-auto bg-[#1e1e1e]/50">
+                        <SyntaxHighlighter
+                          language="python"
+                          style={vscDarkPlus}
+                          customStyle={{ margin: 0, padding: "1.25rem", background: "transparent", fontSize: "13px", lineHeight: "1.6" }}
+                        >
+                          {activeCode}
+                        </SyntaxHighlighter>
+                      </div>
+                    ) : (
+                      <div className="flex-1 flex flex-col items-center justify-center text-gray-600 space-y-4 bg-[#050505]">
+                        <Code2 className="w-8 h-8 opacity-30" />
+                        <p className="text-xs font-medium">No script generated yet.</p>
+                      </div>
+                    )}
+                  </TabsContent>
+                </Tabs>
+              </Panel>
+            </PanelGroup>
           </Panel>
         </PanelGroup>
       </main>

@@ -27,45 +27,70 @@ You have access to tools to fetch the database schema and execute Python code.
    - For aggregations, merges, and grouping, write advanced SQL (Push-down computation) using JOINs, GROUP BY, SUM. Only load final aggregated results into pandas.
    - For scatter plots or raw distribution analysis, ALWAYS append `ORDER BY RANDOM() LIMIT 2000` to safely sample.
 7. MANDATORY: In your final explanation, include the EXACT Python code you executed in a ```python ... ``` markdown block.
-8. VITAL FOR VISUALIZATIONS — generate modern, publication-grade, top-tier SaaS UI charts:
+8. VITAL FOR VISUALIZATIONS — you must adhere to the MODERN FINTECH DARK DASHBOARD style (Neo-Dark Aesthetic with Neon Purple & Cyan):
 
-   A) For category comparisons (e.g. Departments, Reps, Products):
-      - ALWAYS use HORIZONTAL BAR CHARTS (`orientation='h'`) whenever category names have more than a few letters!
-        NEVER tilt X-axis labels at 45 degrees. Horizontal bars keep labels crisp, modern, and perfectly readable.
-      - Numeric formatting: ALWAYS format large numbers cleanly into human-readable units (e.g. `$10.1M`, `$450K`). NEVER render raw `$10,079,855`. Use `tickformat="$,.2s"` or `texttemplate='$%{x:,.2s}'`.
-      - Filter or handle inactive categories: If analyzing sales, filter out categories with $0 sales (`WHERE total_sales > 0`) or group them cleanly so the chart doesn't display empty $0 baselines.
+   A) COLOR & GEOMETRY PALETTE (100% MATCH REFERENCE DESIGN):
+      - Primary Bars (Metrics like Volume, Users, Headcount):
+        Soft neon purple `rgba(168, 85, 247, 0.75)` or `#a855f7` with large rounded corners `marker=dict(cornerradius=8)`.
+      - Highlighting Key/Peak Bar:
+        Color the top-performing category/month with Electric Cyan `#00f2fe` (e.g. `colors = ['#00f2fe' if v == max_val else '#a855f7' for v in values]`).
+      - Trend / Rate Line (Metrics like Revenue, MRR, Salary):
+        Neon Electric Cyan `#00f2fe` smooth line (`line=dict(shape='spline', width=3)`), with prominent WHITE hollow markers (`marker=dict(size=8, color='#ffffff', line=dict(color='#00f2fe', width=2.5))`).
+      - Peak Callout Annotations:
+        Add 1 or 2 elegant callout annotations pointing to the peak bar or peak line:
+        ```python
+        fig.add_annotation(
+            x=peak_x, y=peak_y, text="<b>Peak: " + peak_label + "</b>",
+            showarrow=True, arrowhead=2, arrowcolor="#00f2fe", arrowsize=1,
+            bgcolor="#18181b", bordercolor="#00f2fe", borderwidth=1.5,
+            font=dict(color="#f8fafc", size=11), borderpad=5
+        )
+        ```
 
-   B) For comparing TWO DIFFERENT METRICS (e.g. Sales Volume vs Avg Salary):
-      - ABSOLUTE BAN: NEVER draw a line graph directly cutting through bar charts on the same plot! It looks cluttered and unreadable.
-      - ELITE OPTION 1: Two synchronized subplots (e.g. `make_subplots(rows=2, cols=1, shared_xaxes=True)` or 1 row 2 cols) — Top chart shows Total Sales, Bottom chart shows Avg Salary.
-      - ELITE OPTION 2: A modern Scatter / Bubble quadrant chart:
-        X-axis = Average Salary ($), Y-axis = Total Sales ($), Marker size = Headcount or Deals, Text/Color = Department.
-        This provides instant executive-level ROI insight without visual clutter.
-      - ELITE OPTION 3: Grouped horizontal bars with distinct glowing colors (e.g. Violet `#8b5cf6` for Sales, Cyan `#06b6d4` for Salary).
+   B) DUAL-AXIS / MULTI-METRIC PERFORMANCE OVERVIEW:
+      - When comparing two metrics (e.g. Sales Volume & Average Salary, or MRR & Users):
+        Use `from plotly.subplots import make_subplots; fig = make_subplots(specs=[[{"secondary_y": True}]])`.
+        - Primary Y-axis (left): Bar trace with clean tick formatting (`tickformat="$,.2s"` or similar).
+        - Secondary Y-axis (right): Cyan spline line trace with white markers.
+        - Add clean legend at top left (`orientation='h'`, `y=1.08`, `x=0.05`).
 
-   C) Plotly Code Standard:
+   C) FULL REFERENCE CODE TEMPLATE:
       ```python
       import plotly.graph_objects as go
       from plotly.subplots import make_subplots
 
-      # Example: Clean Horizontal Bar for executive readability
-      fig = go.Figure()
+      # Create dual-axis performance overview
+      fig = make_subplots(specs=[[{"secondary_y": True}]])
+
+      # Highlight peak bar with electric cyan
+      max_sales = df['total_sales'].max()
+      bar_colors = ['#00f2fe' if s == max_sales else 'rgba(168, 85, 247, 0.75)' for s in df['total_sales']]
+
       fig.add_trace(go.Bar(
-          y=df['department'],
-          x=df['total_sales'],
-          orientation='h',
-          marker=dict(color='#8b5cf6', cornerradius=8),
+          x=df['category'], y=df['total_sales'],
+          marker=dict(color=bar_colors, cornerradius=8),
+          name='Total Sales ($)',
           text=df['total_sales'],
-          texttemplate='$%{x:,.2s}',
-          textposition='outside',
-          name='Total Sales'
-      ))
+          texttemplate='$%{text:,.2s}',
+          textposition='outside'
+      ), secondary_y=False)
+
+      fig.add_trace(go.Scatter(
+          x=df['category'], y=df['avg_salary'],
+          mode='lines+markers',
+          line=dict(color='#00f2fe', width=3, shape='spline'),
+          marker=dict(size=8, color='#ffffff', line=dict(color='#00f2fe', width=2.5)),
+          name='Avg Salary ($)'
+      ), secondary_y=True)
+
       fig.update_layout(
-          title=dict(text='Total Sales by Department', font=dict(size=16)),
-          xaxis=dict(tickformat='$,.2s', showgrid=True),
-          yaxis=dict(autorange='reversed'),  # top performer on top
+          title=dict(text='Performance Overview', font=dict(size=18, color='#f8fafc')),
           bargap=0.35,
-          showlegend=False
+          legend=dict(orientation='h', y=1.08, x=0.02, font=dict(size=11, color='#94a3b8')),
+          hovermode='x unified',
+          xaxis=dict(tickfont=dict(size=11, color='#94a3b8')),
+          yaxis=dict(tickformat='$,.2s', gridcolor='rgba(255,255,255,0.05)'),
+          yaxis2=dict(tickformat='$,.2s', gridcolor='rgba(255,255,255,0.02)')
       )
       ```
 
