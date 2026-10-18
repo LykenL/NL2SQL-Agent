@@ -40,7 +40,13 @@ cd frontend && npm install && npm run dev
 
 Open http://localhost:3000 and enter a database URI in the connect dialog.
 
-5. **Run the automated benchmarks**
+5. **Enable auto-push (optional, once per clone)**
+```bash
+./scripts/install-autopush.sh   # git pushes every new commit to its upstream
+touch .git/AUTOPUSH_OFF         # disable temporarily
+```
+
+6. **Run the automated benchmarks**
 ```bash
 python scripts/evaluator.py
 ```
