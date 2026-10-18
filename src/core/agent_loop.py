@@ -187,20 +187,17 @@ You have access to tools to fetch the database schema and execute Python code.
         
     sqlite_mem.add_message(session_id, "assistant", final_text)
     
-    # 1. First priority: look for explicit code block in the assistant response
+    # Extract python code block for the render pane if present
     import re
-    match = re.search(r'```(?:python|sql)(.*?)```', final_text, re.DOTALL | re.IGNORECASE)
+    match = re.search(r'```(?:python|sql)([\s\S]*?)```', final_text, re.IGNORECASE)
     if match:
         code_in_text = match.group(1).strip()
         if code_in_text:
             last_executed_code = code_in_text
-            final_text = re.sub(r'```(?:python|sql).*?```', '', final_text, flags=re.DOTALL | re.IGNORECASE)
-    
+
     final_text = final_text.strip()
     if not final_text:
-        # If assistant returned empty text after stripping code, synthesize factual output from tool results
-        clean_results = "\n".join([r for r in tool_results_history if "schema" not in r.lower()])
-        final_text = f"### Analysis Summary\n\n{clean_results if clean_results else 'Execution completed successfully. See interactive chart below.'}"
+        final_text = "Analysis completed successfully. Review the structured findings and interactive dashboard below."
     
     exec_time = time.time() - start_time
     
