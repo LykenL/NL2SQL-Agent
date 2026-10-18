@@ -27,7 +27,6 @@ import {
   HardDrive,
   X,
   GripVertical,
-  GripHorizontal,
 } from "lucide-react";
 import {
   Panel,
@@ -613,27 +612,27 @@ export default function Home() {
             </div>
           </PanelResizeHandle>
 
-          {/* Right Workspace: Vertical PanelGroup (Chat on Top, Code/Render on Bottom) */}
+          {/* Right Workspace: Unified Single Scroll Container */}
           <Panel defaultSize={78} minSize={40} id="workspace-panel" className="flex flex-col min-h-0 bg-[#050505]">
-            <PanelGroup orientation="vertical" className="h-full w-full">
-              {/* Upper Section: Chat */}
-              <Panel defaultSize={52} minSize={25} id="chat-panel" className="flex flex-col min-h-0 bg-[#050505] relative z-10">
+            <div className="flex-1 overflow-y-auto w-full h-full flex flex-col scroll-smooth divide-y divide-white/10" ref={scrollRef}>
+              {/* Upper Section: Copilot Dialogue */}
+              <div className="flex flex-col bg-[#050505] shrink-0">
                 {/* Chat Panel Header */}
-                <div className="px-5 py-3 border-b border-white/10 bg-[#0d0d12] flex items-center justify-between shrink-0">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.8)]" />
-                    <h2 className="text-xs font-bold text-gray-200 uppercase tracking-wider">
+                <div className="px-6 py-3.5 border-b border-white/10 bg-[#0d0d12] flex items-center justify-between sticky top-0 z-30 shadow-md">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-2.5 h-2.5 rounded-full bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.9)]" />
+                    <h2 className="text-sm font-extrabold text-white tracking-wide">
                       Copilot Dialogue
                     </h2>
                   </div>
-                  <span className="text-[11px] text-gray-500 font-mono">
+                  <span className="text-xs text-gray-400 font-mono bg-white/5 px-2.5 py-1 rounded-full border border-white/5">
                     {messages.length} exchanges
                   </span>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-6 space-y-6 scroll-smooth" ref={scrollRef}>
+                <div className="p-6 space-y-6">
                   {messages.length === 0 && (
-                    <div className="h-full flex flex-col items-center justify-center text-center space-y-6 opacity-0 animate-in fade-in duration-1000">
+                    <div className="py-12 flex flex-col items-center justify-center text-center space-y-6 opacity-0 animate-in fade-in duration-1000">
                       <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-indigo-500/20 to-purple-500/10 border border-indigo-500/20 flex items-center justify-center shadow-[0_0_30px_rgba(99,102,241,0.15)]">
                         <LayoutDashboard className="w-10 h-10 text-indigo-400" />
                       </div>
@@ -699,7 +698,7 @@ export default function Home() {
                   )}
                 </div>
 
-                <div className="p-4 bg-gradient-to-t from-[#050505] via-[#050505] to-transparent">
+                <div className="p-5 bg-gradient-to-t from-[#050505] via-[#050505] to-transparent">
                   <div className="relative group rounded-2xl bg-[#121212] border border-white/10 focus-within:border-indigo-500/60 focus-within:ring-4 focus-within:ring-indigo-500/10 transition-all overflow-hidden shadow-2xl">
                     <Textarea
                       className="min-h-[72px] w-full bg-transparent border-0 text-gray-100 placeholder:text-gray-600 resize-none p-4 pr-16 focus-visible:ring-0 text-[14px]"
@@ -722,23 +721,15 @@ export default function Home() {
                     </button>
                   </div>
                 </div>
-              </Panel>
+              </div>
 
-              {/* Horizontal Resizer between Chat & Render */}
-              <PanelResizeHandle className="h-2 bg-[#0a0a0a] hover:bg-indigo-500/30 active:bg-indigo-500 transition-colors relative flex items-center justify-center cursor-row-resize group z-30">
-                <div className="h-[1px] w-full bg-white/10 group-hover:bg-indigo-500/50 transition-colors" />
-                <div className="absolute h-4 w-12 rounded-full bg-[#161616] border border-white/20 group-hover:border-indigo-400 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md pointer-events-none">
-                  <GripHorizontal className="w-3.5 h-3.5 text-gray-400 group-hover:text-indigo-300" />
-                </div>
-              </PanelResizeHandle>
-
-              {/* Lower Section: Code & Render (Full Width under Chat) */}
-              <Panel defaultSize={48} minSize={25} id="code-render-panel" className="flex flex-col min-h-0 bg-[#0a0a0a] shadow-2xl z-20 border-t border-white/5">
-                <Tabs defaultValue="render" className="flex-1 flex flex-col h-full">
-                  <div className="px-5 py-3 border-b border-white/10 bg-[#0d0d12] flex items-center justify-between shrink-0">
-                    <div className="flex items-center gap-2">
+              {/* Lower Section: Analytics Canvas & Script (Natural Flow on Same Scrollbar) */}
+              <div className="flex flex-col bg-[#0a0a0a] min-h-[560px]">
+                <Tabs defaultValue="render" className="flex-1 flex flex-col">
+                  <div className="px-6 py-3.5 border-b border-white/10 bg-[#0d0d12] flex items-center justify-between sticky top-0 z-20 shadow-md">
+                    <div className="flex items-center gap-2.5">
                       <LayoutDashboard className="w-4 h-4 text-purple-400" />
-                      <h2 className="text-xs font-bold text-gray-200 uppercase tracking-wider">
+                      <h2 className="text-sm font-extrabold text-white tracking-wide">
                         Analytics Canvas & Script
                       </h2>
                     </div>
@@ -780,19 +771,19 @@ export default function Home() {
                     </div>
                   </div>
 
-                  <TabsContent value="render" className="flex-1 p-4 m-0 flex flex-col data-[state=active]:flex bg-[#050505] overflow-hidden">
+                  <TabsContent value="render" className="flex-1 p-5 m-0 flex flex-col data-[state=active]:flex bg-[#050505]">
                     {renderHtml ? (
-                      <div className="flex-1 bg-black/20 border border-white/5 overflow-hidden rounded-xl shadow-inner">
-                        <iframe srcDoc={renderHtml} className="w-full h-full border-0 bg-transparent" sandbox="allow-scripts allow-popups" />
+                      <div className="w-full min-h-[520px] bg-black/20 border border-white/5 overflow-hidden rounded-2xl shadow-inner">
+                        <iframe srcDoc={renderHtml} className="w-full min-h-[520px] border-0 bg-transparent" sandbox="allow-scripts allow-popups" />
                       </div>
                     ) : renderError ? (
-                      <div className="flex-1 bg-red-950/20 border border-red-500/30 rounded-xl p-4 overflow-auto text-red-400 text-xs font-mono whitespace-pre-wrap">
+                      <div className="bg-red-950/20 border border-red-500/30 rounded-2xl p-5 text-red-400 text-xs font-mono whitespace-pre-wrap">
                         {renderError}
                       </div>
                     ) : (
-                      <div className="flex-1 rounded-2xl border border-dashed border-white/10 bg-white/[0.01] flex flex-col items-center justify-center text-center p-6 space-y-4">
-                        <div className="w-14 h-14 rounded-full bg-purple-500/10 flex items-center justify-center">
-                          <Play className="w-7 h-7 text-purple-400/60" />
+                      <div className="min-h-[380px] rounded-2xl border border-dashed border-white/10 bg-white/[0.01] flex flex-col items-center justify-center text-center p-8 space-y-4">
+                        <div className="w-16 h-16 rounded-full bg-purple-500/10 flex items-center justify-center">
+                          <Play className="w-8 h-8 text-purple-400/60" />
                         </div>
                         <div className="space-y-1">
                           <h3 className="text-base font-bold text-gray-200">Interactive Analytics Canvas</h3>
@@ -813,9 +804,9 @@ export default function Home() {
                     )}
                   </TabsContent>
 
-                  <TabsContent value="code" className="flex-1 p-0 m-0 overflow-hidden flex flex-col data-[state=active]:flex">
+                  <TabsContent value="code" className="flex-1 p-0 m-0 flex flex-col data-[state=active]:flex">
                     {activeCode ? (
-                      <div className="flex-1 overflow-auto bg-[#1e1e1e]/50">
+                      <div className="p-4 bg-[#1e1e1e]/50 rounded-2xl m-4 border border-white/5">
                         <SyntaxHighlighter
                           language="python"
                           style={vscDarkPlus}
@@ -825,15 +816,15 @@ export default function Home() {
                         </SyntaxHighlighter>
                       </div>
                     ) : (
-                      <div className="flex-1 flex flex-col items-center justify-center text-gray-600 space-y-4 bg-[#050505]">
+                      <div className="min-h-[260px] flex flex-col items-center justify-center text-gray-600 space-y-4 bg-[#050505]">
                         <Code2 className="w-8 h-8 opacity-30" />
                         <p className="text-xs font-medium">No script generated yet.</p>
                       </div>
                     )}
                   </TabsContent>
                 </Tabs>
-              </Panel>
-            </PanelGroup>
+              </div>
+            </div>
           </Panel>
         </PanelGroup>
       </main>

@@ -226,13 +226,12 @@ def execute_code(request: ExecuteRequest):
                             x=1,
                         ),
                         colorway=[
-                            "#8b5cf6",  # Violet
-                            "#06b6d4",  # Cyan
-                            "#10b981",  # Emerald
-                            "#f59e0b",  # Amber
-                            "#ec4899",  # Pink
-                            "#3b82f6",  # Blue
-                            "#a855f7",  # Purple
+                            "rgba(168, 85, 247, 0.75)",  # Soft Neon Purple
+                            "#ff7a00",                   # High-contrast Vivid Coral/Amber
+                            "#00f2fe",                   # Electric Cyan
+                            "#10b981",                   # Emerald
+                            "#ec4899",                   # Pink
+                            "#3b82f6",                   # Blue
                         ],
                         xaxis=dict(
                             gridcolor="rgba(255,255,255,0.04)",
@@ -250,14 +249,15 @@ def execute_code(request: ExecuteRequest):
                             zerolinecolor="rgba(255,255,255,0.06)",
                         ),
                     )
-                    # Polish traces: rounded bars, smooth spline lines, remove harsh borders
+                    # Polish traces: semi-transparent rounded bars, smooth spline lines
                     if hasattr(fig_to_render, "data") and len(fig_to_render.data) > 0:
                         fig_to_render.update_traces(
-                            marker=dict(line=dict(width=0), cornerradius=6),
+                            opacity=0.75,
+                            marker=dict(line=dict(width=0), cornerradius=8),
                             selector=dict(type="bar")
                         )
                         fig_to_render.update_traces(
-                            line=dict(shape="spline", width=3),
+                            line=dict(shape="spline", width=3.5),
                             selector=dict(type="scatter")
                         )
                         fig_to_render.update_traces(

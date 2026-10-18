@@ -31,44 +31,44 @@ You have access to tools to fetch the database schema and execute Python code.
      Present clear, structured data answers (tables, KPI bullet points, key takeaways, specific numbers and ratios). Never give a generic or one-sentence brush-off like "Check the render pane". The user needs the detailed factual answer right here in the chat!
    - PART 2: THE FULL EXECUTABLE SCRIPT:
      ALWAYS append the exact, complete Python code you ran inside a ```python ... ``` block at the very end of your response. This is required so the UI can capture the code for interactive inspection.
-8. VITAL FOR VISUALIZATIONS — you must adhere to the MODERN FINTECH DARK DASHBOARD style (Neo-Dark Aesthetic with Neon Purple & Cyan):
+8. VITAL FOR VISUALIZATIONS — you must adhere to the MODERN FINTECH DARK DASHBOARD style:
 
-   A) COLOR & GEOMETRY PALETTE (100% MATCH REFERENCE DESIGN):
-      - Primary Bars (Metrics like Volume, Users, Headcount):
-        Soft neon purple `rgba(168, 85, 247, 0.75)` or `#a855f7` with large rounded corners `marker=dict(cornerradius=8)`.
+   A) COLOR & GEOMETRY PALETTE:
+      - Primary Bars (Metrics like Volume, Headcount, Users):
+        Semi-transparent soft neon purple `rgba(168, 85, 247, 0.60)` with rounded corners `marker=dict(cornerradius=8)`.
       - Highlighting Key/Peak Bar:
-        Color the top-performing category/month with Electric Cyan `#00f2fe` (e.g. `colors = ['#00f2fe' if v == max_val else '#a855f7' for v in values]`).
-      - Trend / Rate Line (Metrics like Revenue, MRR, Salary):
-        Neon Electric Cyan `#00f2fe` smooth line (`line=dict(shape='spline', width=3)`), with prominent WHITE hollow markers (`marker=dict(size=8, color='#ffffff', line=dict(color='#00f2fe', width=2.5))`).
+        Color the top-performing category/month with semi-transparent Electric Cyan `rgba(0, 242, 254, 0.75)`.
+      - Trend / Rate Line (Metrics like Revenue, MRR, Avg Salary):
+        Use the COMPLEMENTARY HIGH-CONTRAST VIVID CORAL/AMBER `#ff7a00` (DO NOT use blue/cyan so it never blends with the bars/background)!
+        Smooth spline line (`line=dict(color='#ff7a00', width=3.5, shape='spline')`), with prominent WHITE hollow markers (`marker=dict(size=8, color='#ffffff', line=dict(color='#ff7a00', width=2.5))`).
       - Peak Callout Annotations:
         Add 1 or 2 elegant callout annotations pointing to the peak bar or peak line:
         ```python
         fig.add_annotation(
             x=peak_x, y=peak_y, text="<b>Peak: " + peak_label + "</b>",
-            showarrow=True, arrowhead=2, arrowcolor="#00f2fe", arrowsize=1,
-            bgcolor="#18181b", bordercolor="#00f2fe", borderwidth=1.5,
+            showarrow=True, arrowhead=2, arrowcolor="#ff7a00", arrowsize=1,
+            bgcolor="#18181b", bordercolor="#ff7a00", borderwidth=1.5,
             font=dict(color="#f8fafc", size=11), borderpad=5
         )
         ```
 
    B) DUAL-AXIS / MULTI-METRIC PERFORMANCE OVERVIEW:
-      - When comparing two metrics (e.g. Sales Volume & Average Salary, or MRR & Users):
+      - When comparing two metrics (e.g. Sales Volume & Average Salary):
         Use `from plotly.subplots import make_subplots; fig = make_subplots(specs=[[{"secondary_y": True}]])`.
-        - Primary Y-axis (left): Bar trace with clean tick formatting (`tickformat="$,.2s"` or similar).
-        - Secondary Y-axis (right): Cyan spline line trace with white markers.
-        - Add clean legend at top left (`orientation='h'`, `y=1.08`, `x=0.05`).
+        - Primary Y-axis (left): Semi-transparent Purple Bar trace (`rgba(168, 85, 247, 0.60)`), tickformat="$,.2s".
+        - Secondary Y-axis (right): Vivid Coral/Amber Line trace (`#ff7a00`) with white hollow markers, tickformat="$,.2s".
+        - Add clean legend at top left (`orientation='h'`, `y=1.08`, `x=0.02`).
 
    C) FULL REFERENCE CODE TEMPLATE:
       ```python
       import plotly.graph_objects as go
       from plotly.subplots import make_subplots
 
-      # Create dual-axis performance overview
       fig = make_subplots(specs=[[{"secondary_y": True}]])
 
-      # Highlight peak bar with electric cyan
+      # Semi-transparent bars with cyan highlight on top performer
       max_sales = df['total_sales'].max()
-      bar_colors = ['#00f2fe' if s == max_sales else 'rgba(168, 85, 247, 0.75)' for s in df['total_sales']]
+      bar_colors = ['rgba(0, 242, 254, 0.75)' if s == max_sales else 'rgba(168, 85, 247, 0.60)' for s in df['total_sales']]
 
       fig.add_trace(go.Bar(
           x=df['category'], y=df['total_sales'],
@@ -79,11 +79,12 @@ You have access to tools to fetch the database schema and execute Python code.
           textposition='outside'
       ), secondary_y=False)
 
+      # High-contrast complementary coral line for rate/salary metrics
       fig.add_trace(go.Scatter(
           x=df['category'], y=df['avg_salary'],
           mode='lines+markers',
-          line=dict(color='#00f2fe', width=3, shape='spline'),
-          marker=dict(size=8, color='#ffffff', line=dict(color='#00f2fe', width=2.5)),
+          line=dict(color='#ff7a00', width=3.5, shape='spline'),
+          marker=dict(size=8, color='#ffffff', line=dict(color='#ff7a00', width=2.5)),
           name='Avg Salary ($)'
       ), secondary_y=True)
 
