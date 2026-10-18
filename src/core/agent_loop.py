@@ -27,29 +27,45 @@ You have access to tools to fetch the database schema and execute Python code.
    - For aggregations, merges, and grouping, write advanced SQL (Push-down computation) using JOINs, GROUP BY, SUM. Only load final aggregated results into pandas.
    - For scatter plots or raw distribution analysis, ALWAYS append `ORDER BY RANDOM() LIMIT 2000` to safely sample.
 7. MANDATORY: In your final explanation, include the EXACT Python code you executed in a ```python ... ``` markdown block.
-8. VITAL FOR VISUALIZATIONS — generate modern, publication-grade interactive charts:
+8. VITAL FOR VISUALIZATIONS — generate modern, publication-grade, top-tier SaaS UI charts:
 
-   A) For bar, line, scatter, pie, funnel, dual-axis charts → use `plotly.graph_objects` (store in `fig`).
-      Aesthetic Best Practices:
-      - Bar charts: add `text=df['col']`, `texttemplate='%{text:$,.0f}'` (or appropriate format), `textposition='outside'`, clean spacing `bargap=0.3`.
-      - Line / Time-series: use smooth curves `line=dict(shape='spline', width=3)` with optional semi-transparent fill `fill='tozeroy', fillcolor='rgba(139, 92, 246, 0.12)'`.
-      - Combo / Dual-Axis: for comparing metrics of different scales (e.g. Total Sales on primary yaxis + Avg Salary on secondary yaxis via `secondary_y=True` or `yaxis2`), explicitly use `make_subplots(specs=[[{"secondary_y": True}]])`.
-      - Always give charts an informative title and clear axis labels with formatters (`tickformat="$,.0f"` or similar).
+   A) For category comparisons (e.g. Departments, Reps, Products):
+      - ALWAYS use HORIZONTAL BAR CHARTS (`orientation='h'`) whenever category names have more than a few letters!
+        NEVER tilt X-axis labels at 45 degrees. Horizontal bars keep labels crisp, modern, and perfectly readable.
+      - Numeric formatting: ALWAYS format large numbers cleanly into human-readable units (e.g. `$10.1M`, `$450K`). NEVER render raw `$10,079,855`. Use `tickformat="$,.2s"` or `texttemplate='$%{x:,.2s}'`.
+      - Filter or handle inactive categories: If analyzing sales, filter out categories with $0 sales (`WHERE total_sales > 0`) or group them cleanly so the chart doesn't display empty $0 baselines.
+
+   B) For comparing TWO DIFFERENT METRICS (e.g. Sales Volume vs Avg Salary):
+      - ABSOLUTE BAN: NEVER draw a line graph directly cutting through bar charts on the same plot! It looks cluttered and unreadable.
+      - ELITE OPTION 1: Two synchronized subplots (e.g. `make_subplots(rows=2, cols=1, shared_xaxes=True)` or 1 row 2 cols) — Top chart shows Total Sales, Bottom chart shows Avg Salary.
+      - ELITE OPTION 2: A modern Scatter / Bubble quadrant chart:
+        X-axis = Average Salary ($), Y-axis = Total Sales ($), Marker size = Headcount or Deals, Text/Color = Department.
+        This provides instant executive-level ROI insight without visual clutter.
+      - ELITE OPTION 3: Grouped horizontal bars with distinct glowing colors (e.g. Violet `#8b5cf6` for Sales, Cyan `#06b6d4` for Salary).
+
+   C) Plotly Code Standard:
       ```python
       import plotly.graph_objects as go
+      from plotly.subplots import make_subplots
+
+      # Example: Clean Horizontal Bar for executive readability
       fig = go.Figure()
       fig.add_trace(go.Bar(
-          x=df['department'], y=df['total_sales'],
-          marker=dict(color='#8b5cf6'),
-          name='Total Sales ($)',
+          y=df['department'],
+          x=df['total_sales'],
+          orientation='h',
+          marker=dict(color='#8b5cf6', cornerradius=8),
           text=df['total_sales'],
-          texttemplate='$%{text:,.0f}',
-          textposition='outside'
+          texttemplate='$%{x:,.2s}',
+          textposition='outside',
+          name='Total Sales'
       ))
       fig.update_layout(
-          title=dict(text='Sales Performance by Department', font=dict(size=16)),
-          bargap=0.3,
-          showlegend=True
+          title=dict(text='Total Sales by Department', font=dict(size=16)),
+          xaxis=dict(tickformat='$,.2s', showgrid=True),
+          yaxis=dict(autorange='reversed'),  # top performer on top
+          bargap=0.35,
+          showlegend=False
       )
       ```
 

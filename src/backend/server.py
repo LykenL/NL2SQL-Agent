@@ -238,24 +238,31 @@ def execute_code(request: ExecuteRequest):
                             gridcolor="rgba(255,255,255,0.04)",
                             linecolor="rgba(255,255,255,0.08)",
                             tickcolor="rgba(255,255,255,0.08)",
-                            tickfont=dict(color="#64748b", size=11),
+                            tickfont=dict(color="#94a3b8", size=11),
+                            tickangle=0,
                             zerolinecolor="rgba(255,255,255,0.08)",
                         ),
                         yaxis=dict(
                             gridcolor="rgba(255,255,255,0.04)",
                             linecolor="rgba(255,255,255,0.08)",
                             tickcolor="rgba(255,255,255,0.08)",
-                            tickfont=dict(color="#64748b", size=11),
+                            tickfont=dict(color="#94a3b8", size=11),
                             zerolinecolor="rgba(255,255,255,0.06)",
                         ),
                     )
-                    # Polish traces: smooth curves, eliminate harsh borders
+                    # Polish traces: rounded bars, smooth spline lines, remove harsh borders
                     if hasattr(fig_to_render, "data") and len(fig_to_render.data) > 0:
                         fig_to_render.update_traces(
-                            marker=dict(line=dict(width=0)), selector=dict(type="bar")
+                            marker=dict(line=dict(width=0), cornerradius=6),
+                            selector=dict(type="bar")
                         )
                         fig_to_render.update_traces(
-                            marker=dict(line=dict(width=0)), selector=dict(type="pie")
+                            line=dict(shape="spline", width=3),
+                            selector=dict(type="scatter")
+                        )
+                        fig_to_render.update_traces(
+                            marker=dict(line=dict(width=0)),
+                            selector=dict(type="pie")
                         )
                 except Exception:
                     pass
@@ -279,29 +286,42 @@ def execute_code(request: ExecuteRequest):
   <style>
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
     body {{
-      background: transparent;
+      background: #09090b;
       color: #f8fafc;
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
       min-height: 100vh;
       display: flex;
       flex-direction: column;
       overflow-x: hidden;
-      padding: 10px;
+      padding: 14px;
+    }}
+    .plotly-card {{
+      background: radial-gradient(circle at 50% 0%, rgba(99, 102, 241, 0.08) 0%, rgba(15, 23, 42, 0.4) 100%);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      padding: 8px;
+      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.7);
+      flex: 1;
+      display: flex;
+      flex-direction: column;
     }}
     .plotly-graph-div {{
       width: 100% !important;
       height: 100% !important;
       min-height: 420px;
+      flex: 1;
     }}
     .hoverlayer .hovertext {{
-      backdrop-filter: blur(8px) !important;
+      backdrop-filter: blur(12px) !important;
       box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6) !important;
       border-radius: 8px !important;
     }}
   </style>
 </head>
 <body>
+<div class="plotly-card">
 {raw_plotly}
+</div>
 </body>
 </html>"""
 
