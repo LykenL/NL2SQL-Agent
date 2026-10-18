@@ -170,6 +170,7 @@ def execute_code(request: ExecuteRequest):
 
     output_html = ""
     error_msg = ""
+    error_detail = ""
 
     f = io.StringIO()
     with redirect_stdout(f):
@@ -420,7 +421,34 @@ def execute_code(request: ExecuteRequest):
                     pass  # altair not installed, skip silently
 
         except Exception as e:
-            error_msg = traceback.format_exc()
+            # The canvas shows a readable one-liner; the full traceback goes to
+            # logs/`error_detail` so the panel is not wall-to-wall stack frames.
+            # Point at the line in the LLM's own script, not the deepest pandas frame.
+            tb_ = e.__traceback__
+            line_no = None
+            while tb_ is not None:
+                if tb_.tb_frame.f_code.co_filename in ("<string>", "<exec>"):
+                    line_no = tb_.tb_lineno
+                tb_ = tb_.tb_next
+            lines = code.splitlines()
+            src = lines[line_no - 1].strip() if line_no and 0 < line_no <= len(lines) else ""
+
+            error_msg = f"{type(e).__name__}: {e}"
+            if line_no:
+                error_msg += f"\n  at line {line_no}"
+            if src:
+                error_msg += f": {' '.join(src.split())}"
+            if isinstance(e, KeyError):
+                frames = [
+                    (k, v) for k, v in local_vars.items()
+                    if not k.startswith("_") and hasattr(v, "columns")
+                ]
+                if frames:
+                    error_msg += "\n\n  Available columns:"
+                    for name, df in frames:
+                        error_msg += f"\n  - {name}: {list(df.columns)}"
+            error_detail = traceback.format_exc()
+            print(error_detail, file=sys.stderr)
 
     stdout = f.getvalue()
 
@@ -435,5 +463,6 @@ def execute_code(request: ExecuteRequest):
     return {
         "html": output_html,
         "error": error_msg,
+        "error_detail": error_detail,
         "stdout": stdout,
     }

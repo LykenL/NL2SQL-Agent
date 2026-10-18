@@ -13,11 +13,12 @@ from src.agents.compression_agent import compress_session_memory
 # through so the chat bubble never shows a script.
 _CODE_FENCE_RE = re.compile(r"```[ \t]*[A-Za-z0-9_+\-]*[ \t]*\n?[\s\S]*?(?:```|\Z)")
 _CODE_LANG_RE = re.compile(r"^```[ \t]*([A-Za-z0-9_+\-]*)", re.MULTILINE)
-_CODE_HINT = "> 🧾 可执行脚本已生成，完整代码见下方 **Generated Script** 面板。"
+def strip_code_fences(text: str, hint: str = "") -> str:
+    """Remove every fenced code block from a chat reply, leaving prose only.
 
-
-def strip_code_fences(text: str, hint: str = _CODE_HINT) -> str:
-    """Remove every fenced code block from a chat reply, leaving prose only."""
+    Nothing is substituted by default: a placeholder line in the chat bubble is
+    itself noise, and the Generated Script pane already carries the code.
+    """
     if not text:
         return text
     if "```" not in text:
@@ -25,7 +26,7 @@ def strip_code_fences(text: str, hint: str = _CODE_HINT) -> str:
 
     def _repl(match: "re.Match") -> str:
         # Indented fences (whole block indented under a list item) still count.
-        return "\n\n" + hint + "\n\n"
+        return ("\n\n" + hint + "\n\n") if hint else "\n\n"
 
     cleaned = _CODE_FENCE_RE.sub(_repl, text)
     # Collapse the blank-line runs the removal leaves behind.
@@ -47,6 +48,7 @@ def run_agent_loop(user_message: str, session_id: str, tools_schema: list, tool_
 You have access to tools to fetch the database schema and execute Python code.
 1. ALWAYS use the `get_database_schema` tool first to understand the tables.
 2. Write Python code using pandas and SQLAlchemy to query the database.
+   NEVER assume column names. Use ONLY the identifiers returned by get_database_schema; a fabricated `id`/`name`/`amount` column is the most common crash. Before any groupby/agg/merge/rename, check `df.columns` and build the aggregation from real names, e.g. `.agg(total=('<real_amount_col>', 'sum'))` — never `.agg({'id': 'count'})`.
 3. ALWAYS use the `execute_python_code` tool to run your code and see the result.
 4. If the code fails, read the error message, fix your code, and try again.
 5. NEVER write INSERT, UPDATE, DELETE, or DROP statements. Only SELECT.
@@ -231,7 +233,7 @@ You have access to tools to fetch the database schema and execute Python code.
 
     final_text = strip_code_fences(raw_text)
     if not final_text:
-        final_text = "分析已完成，完整脚本见下方 **Generated Script** 面板。"
+        final_text = "Analysis complete. The script is available in the Generated Script panel."
 
     # Persist the scrubbed version so history replay can never re-teach the model
     # to paste code into the chat.

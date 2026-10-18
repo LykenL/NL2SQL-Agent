@@ -8,6 +8,48 @@ DANGEROUS_KEYWORDS = [
     "shutil", "rm -rf", "sys.exit"
 ]
 
+def _format_execution_error(exc: Exception, code_string: str, scope: dict) -> str:
+    """
+    Turn a traceback into a self-correcting tool result.
+
+    The most common LLM failure is referencing a column that does not exist
+    (e.g. .agg({'id': 'count'}) on a frame with no `id`). Returning the real
+    column names lets the model fix it on the next iteration instead of
+    burning the whole budget and handing a crashing script to the UI.
+    """
+    # Point at the line in the LLM's own script, not the deepest pandas frame.
+    tb = exc.__traceback__
+    line_no = None
+    while tb is not None:
+        if tb.tb_frame.f_code.co_filename in ("<string>", "<exec>"):
+            line_no = tb.tb_lineno
+        tb = tb.tb_next
+
+    lines = code_string.splitlines()
+    src_line = lines[line_no - 1].strip() if line_no and 0 < line_no <= len(lines) else ""
+
+    parts = [f"❌ Execution Error: {type(exc).__name__}: {exc}"]
+    if line_no:
+        parts.append(f"   at line {line_no}: {src_line}" if src_line else f"   at line {line_no}")
+
+    frames = [
+        (k, v) for k, v in list(scope.items())
+        if not k.startswith("_") and isinstance(v, pd.DataFrame)
+    ]
+    if frames:
+        parts.append("   DataFrames currently in scope (use these exact column names):")
+        for name, df in frames:
+            parts.append(f"   - {name}: {list(df.columns)}  rows={len(df)}")
+
+    if isinstance(exc, KeyError):
+        parts.append(
+            "   Hint: a column/label you referenced does not exist. Build the aggregation from the "
+            "names listed above, never from an assumed name like 'id'. Example: "
+            ".agg(total=('amount', 'sum'), orders=('order_id', 'count'))."
+        )
+    return "\n".join(parts)
+
+
 def extract_code(llm_response: str) -> str:
     """
     Extracts the pure Python code from the Markdown code block.
@@ -49,6 +91,6 @@ def safe_execute(code_string: str, custom_globals: dict = None) -> str:
         
         return output_buffer.getvalue()
     except Exception as e:
-        return f"❌ Execution Error: {str(e)}"
+        return _format_execution_error(e, code_string, exec_globals)
     finally:
         output_buffer.close()

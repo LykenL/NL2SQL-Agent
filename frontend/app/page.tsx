@@ -314,8 +314,9 @@ const CODE_FENCE_RE = /```[A-Za-z0-9_+-]*\n?[\s\S]*?(?:```|$)/g;
 
 const stripCodeFences = (text: string): string => {
   if (!text || !text.includes("```")) return text || "";
+  // Drop the block entirely — no placeholder line in the chat bubble.
   return text
-    .replace(CODE_FENCE_RE, "\n\n> 🧾 可执行脚本已生成，完整代码见下方 **Generated Script** 面板。\n\n")
+    .replace(CODE_FENCE_RE, "\n\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 };
