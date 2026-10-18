@@ -26,7 +26,11 @@ You have access to tools to fetch the database schema and execute Python code.
 6. CRITICAL PERFORMANCE RULE: The server has strict RAM limits. You must NEVER use `SELECT *` without a limit.
    - For aggregations, merges, and grouping, write advanced SQL (Push-down computation) using JOINs, GROUP BY, SUM. Only load final aggregated results into pandas.
    - For scatter plots or raw distribution analysis, ALWAYS append `ORDER BY RANDOM() LIMIT 2000` to safely sample.
-7. MANDATORY: In your final explanation, include the EXACT Python code you executed in a ```python ... ``` markdown block.
+7. MANDATORY RESPONSE FORMAT — You must deliver a COMPLETE two-part response:
+   - PART 1: COMPREHENSIVE FACTUAL FINDINGS (in Markdown):
+     Present clear, structured data answers (tables, KPI bullet points, key takeaways, specific numbers and ratios). Never give a generic or one-sentence brush-off like "Check the render pane". The user needs the detailed factual answer right here in the chat!
+   - PART 2: THE FULL EXECUTABLE SCRIPT:
+     ALWAYS append the exact, complete Python code you ran inside a ```python ... ``` block at the very end of your response. This is required so the UI can capture the code for interactive inspection.
 8. VITAL FOR VISUALIZATIONS — you must adhere to the MODERN FINTECH DARK DASHBOARD style (Neo-Dark Aesthetic with Neon Purple & Cyan):
 
    A) COLOR & GEOMETRY PALETTE (100% MATCH REFERENCE DESIGN):
@@ -134,12 +138,15 @@ You have access to tools to fetch the database schema and execute Python code.
     iteration = 0
     start_time = time.time()
     
+    last_executed_code = ""
+    tool_results_history = []
+    
     while iteration < max_iterations:
         iteration += 1
         if iteration == max_iterations - 1:
             messages.append({
                 "role": "user",
-                "content": "CRITICAL WARNING: You have reached the maximum allowed tool calls. You have ONE turn left. You MUST stop using tools immediately and summarize your findings to the user based on the context above. Do NOT call any more tools."
+                "content": "CRITICAL: You have ONE turn left. Summarize your factual data findings and conclusion in clear Markdown tables and bullet points. Include the full Python code you executed."
             })
             
         response = client.chat.completions.create(
@@ -162,10 +169,13 @@ You have access to tools to fetch the database schema and execute Python code.
                     fargs = json.loads(t.function.arguments)
                 except Exception:
                     fargs = {}
+                if fname == "execute_python_code":
+                    last_executed_code = fargs.get("code_string", last_executed_code)
                 if fname in tool_map:
                     res = tool_map[fname](**fargs)
                 else:
                     res = "Tool not found"
+                tool_results_history.append(str(res))
                 messages.append({"role": "tool", "tool_call_id": t.id, "name": fname, "content": str(res)})
         else:
             break
@@ -176,18 +186,22 @@ You have access to tools to fetch the database schema and execute Python code.
         
     sqlite_mem.add_message(session_id, "assistant", final_text)
     
-    # We parse the python code block out if it exists
+    # 1. First priority: look for explicit code block in the assistant response
     import re
-    executed_code = ""
     match = re.search(r'```(?:python|sql)(.*?)```', final_text, re.DOTALL | re.IGNORECASE)
     if match:
-        executed_code = match.group(1).strip()
-        final_text = re.sub(r'```(?:python|sql).*?```', '\n*(Code pushed to right Render pane)*\n', final_text, flags=re.DOTALL | re.IGNORECASE)
+        code_in_text = match.group(1).strip()
+        if code_in_text:
+            last_executed_code = code_in_text
+            final_text = re.sub(r'```(?:python|sql).*?```', '', final_text, flags=re.DOTALL | re.IGNORECASE)
     
     final_text = final_text.strip()
     if not final_text:
-        final_text = "I have finished processing your request. Please check the Code/Render pane for the results."
+        # If assistant returned empty text after stripping code, synthesize factual output from tool results
+        clean_results = "\n".join([r for r in tool_results_history if "schema" not in r.lower()])
+        final_text = f"### Analysis Summary\n\n{clean_results if clean_results else 'Execution completed successfully. See interactive chart below.'}"
+    
     exec_time = time.time() - start_time
     
-    return final_text, executed_code, None, exec_time
+    return final_text, last_executed_code, None, exec_time
 

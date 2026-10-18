@@ -405,17 +405,17 @@ export default function Home() {
     setShowDbModal(false);
   };
 
-  // ── Execute code (right pane) ───────────────────────────────────────────
-  const executeCode = async () => {
-    if (!activeCode) return;
+  // ── Execute code (render pane) ──────────────────────────────────────────
+  const executeCode = async (codeOverride?: string) => {
+    const codeToRun = codeOverride || activeCode;
+    if (!codeToRun) return;
     setRendering(true);
     setRenderError("");
-    setRenderHtml("");
     try {
       const res = await fetch(`${API_BASE}/api/execute`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: activeCode, db_uri: dbUri || undefined }),
+        body: JSON.stringify({ code: codeToRun, db_uri: dbUri || undefined }),
       });
       const data = await res.json();
       if (data.error) {
@@ -464,8 +464,15 @@ export default function Home() {
         { role: "assistant", content: data.response || "No response" },
       ]);
 
-      if (data.sql_executed) {
-        setActiveCode(data.sql_executed);
+      let codeToRun = data.sql_executed || "";
+      if (!codeToRun && data.response) {
+        const match = data.response.match(/```(?:python|sql)([\s\S]*?)```/i);
+        if (match) codeToRun = match[1].trim();
+      }
+
+      if (codeToRun) {
+        setActiveCode(codeToRun);
+        executeCode(codeToRun);
       }
     } catch (err) {
       setMessages((prev) => [
@@ -611,6 +618,19 @@ export default function Home() {
             <PanelGroup orientation="vertical" className="h-full w-full">
               {/* Upper Section: Chat */}
               <Panel defaultSize={52} minSize={25} id="chat-panel" className="flex flex-col min-h-0 bg-[#050505] relative z-10">
+                {/* Chat Panel Header */}
+                <div className="px-5 py-3 border-b border-white/10 bg-[#0d0d12] flex items-center justify-between shrink-0">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.8)]" />
+                    <h2 className="text-xs font-bold text-gray-200 uppercase tracking-wider">
+                      Copilot Dialogue
+                    </h2>
+                  </div>
+                  <span className="text-[11px] text-gray-500 font-mono">
+                    {messages.length} exchanges
+                  </span>
+                </div>
+
                 <div className="flex-1 overflow-y-auto p-6 space-y-6 scroll-smooth" ref={scrollRef}>
                   {messages.length === 0 && (
                     <div className="h-full flex flex-col items-center justify-center text-center space-y-6 opacity-0 animate-in fade-in duration-1000">
@@ -715,40 +735,49 @@ export default function Home() {
               {/* Lower Section: Code & Render (Full Width under Chat) */}
               <Panel defaultSize={48} minSize={25} id="code-render-panel" className="flex flex-col min-h-0 bg-[#0a0a0a] shadow-2xl z-20 border-t border-white/5">
                 <Tabs defaultValue="render" className="flex-1 flex flex-col h-full">
-                  <div className="p-3 border-b border-white/10 bg-[#121212] flex items-center justify-between">
-                    <TabsList className="bg-black/50 border border-white/5 p-1 rounded-xl h-auto">
-                      <TabsTrigger
-                        value="render"
-                        className="text-[12px] px-4 py-1.5 text-gray-400 hover:text-gray-200 data-[state=active]:bg-purple-600/20 data-[state=active]:text-purple-300 font-bold transition-all rounded-lg"
-                      >
-                        <Play className="w-3.5 h-3.5 mr-1.5" /> Live Visualization
-                      </TabsTrigger>
-                      <TabsTrigger
-                        value="code"
-                        className="text-[12px] px-4 py-1.5 text-gray-400 hover:text-gray-200 data-[state=active]:bg-indigo-600/20 data-[state=active]:text-indigo-300 font-bold transition-all rounded-lg"
-                      >
-                        <Code2 className="w-3.5 h-3.5 mr-1.5" /> Generated Script
-                      </TabsTrigger>
-                    </TabsList>
+                  <div className="px-5 py-3 border-b border-white/10 bg-[#0d0d12] flex items-center justify-between shrink-0">
+                    <div className="flex items-center gap-2">
+                      <LayoutDashboard className="w-4 h-4 text-purple-400" />
+                      <h2 className="text-xs font-bold text-gray-200 uppercase tracking-wider">
+                        Analytics Canvas & Script
+                      </h2>
+                    </div>
 
-                    {activeCode && (
-                      <Button
-                        onClick={executeCode}
-                        disabled={rendering}
-                        size="sm"
-                        className="bg-purple-600 hover:bg-purple-500 text-white text-xs px-3 py-1.5 h-8 rounded-lg shadow-[0_0_12px_rgba(168,85,247,0.3)] font-semibold"
-                      >
-                        {rendering ? (
-                          <>
-                            <Loader2 className="w-3 h-3 mr-1.5 animate-spin" /> Rendering...
-                          </>
-                        ) : (
-                          <>
-                            <Play className="w-3 h-3 mr-1.5" /> Re-run & Render
-                          </>
-                        )}
-                      </Button>
-                    )}
+                    <div className="flex items-center gap-3">
+                      <TabsList className="bg-black/50 border border-white/5 p-1 rounded-xl h-auto">
+                        <TabsTrigger
+                          value="render"
+                          className="text-[12px] px-3.5 py-1 text-gray-400 hover:text-gray-200 data-[state=active]:bg-purple-600/20 data-[state=active]:text-purple-300 font-bold transition-all rounded-lg"
+                        >
+                          <Play className="w-3 h-3 mr-1.5" /> Live Visualization
+                        </TabsTrigger>
+                        <TabsTrigger
+                          value="code"
+                          className="text-[12px] px-3.5 py-1 text-gray-400 hover:text-gray-200 data-[state=active]:bg-indigo-600/20 data-[state=active]:text-indigo-300 font-bold transition-all rounded-lg"
+                        >
+                          <Code2 className="w-3 h-3 mr-1.5" /> Generated Script
+                        </TabsTrigger>
+                      </TabsList>
+
+                      {activeCode && (
+                        <Button
+                          onClick={() => executeCode()}
+                          disabled={rendering}
+                          size="sm"
+                          className="bg-purple-600 hover:bg-purple-500 text-white text-xs px-3 py-1 h-7 rounded-lg shadow-[0_0_12px_rgba(168,85,247,0.3)] font-semibold"
+                        >
+                          {rendering ? (
+                            <>
+                              <Loader2 className="w-3 h-3 mr-1.5 animate-spin" /> Rendering...
+                            </>
+                          ) : (
+                            <>
+                              <Play className="w-3 h-3 mr-1.5" /> Re-run
+                            </>
+                          )}
+                        </Button>
+                      )}
+                    </div>
                   </div>
 
                   <TabsContent value="render" className="flex-1 p-4 m-0 flex flex-col data-[state=active]:flex bg-[#050505] overflow-hidden">
@@ -773,7 +802,7 @@ export default function Home() {
                         </div>
                         {activeCode && (
                           <Button
-                            onClick={executeCode}
+                            onClick={() => executeCode()}
                             disabled={rendering}
                             className="bg-purple-600/20 text-purple-300 hover:bg-purple-600/40 border border-purple-500/30 rounded-xl px-5 py-2.5 text-xs font-bold"
                           >

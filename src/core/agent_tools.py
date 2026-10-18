@@ -12,9 +12,6 @@ def create_agent_tools(db_uri: str) -> tuple:
             code_string,
             custom_globals={"db_uri": db_uri, "DATABASE_URI": db_uri},
         )
-        if "❌" not in output:
-            directive = "\n\n[SYSTEM DIRECTIVE]: Execution successful. Keep your final text response extremely concise and DO NOT repeat the raw code in the chat."
-            return output + directive
         return output
 
     tools_schema = [

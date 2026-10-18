@@ -277,54 +277,6 @@ def execute_code(request: ExecuteRequest):
                         "modeBarButtonsToRemove": ["lasso2d", "select2d"],
                     },
                 )
-                # Compute smart KPI cards from local_vars if dataframe exists
-                kpi_cards_html = ""
-                try:
-                    import pandas as pd
-                    df_target = None
-                    for val in local_vars.values():
-                        if isinstance(val, pd.DataFrame) and not val.empty:
-                            df_target = val
-                            break
-                    if df_target is not None:
-                        num_cols = df_target.select_dtypes(include=['number']).columns.tolist()
-                        str_cols = df_target.select_dtypes(include=['object', 'string']).columns.tolist()
-                        
-                        col1_label = num_cols[0].replace('_', ' ').upper() if len(num_cols) > 0 else "TOTAL METRIC"
-                        val1_sum = df_target[num_cols[0]].sum() if len(num_cols) > 0 else 0
-                        val1_str = f"${val1_sum/1e6:.1f}M" if val1_sum >= 1e6 else (f"${val1_sum/1e3:.1f}k" if val1_sum >= 1e3 else f"${val1_sum:,.0f}")
-                        
-                        col2_label = "RECORDS ANALYZED"
-                        val2_str = f"{len(df_target):,}"
-                        
-                        col3_label = "TOP CATEGORY"
-                        val3_str = "N/A"
-                        if len(str_cols) > 0 and len(num_cols) > 0:
-                            max_idx = df_target[num_cols[0]].idxmax()
-                            val3_str = str(df_target.loc[max_idx, str_cols[0]])
-
-                        kpi_cards_html = f"""
-                        <div class="kpi-grid">
-                          <div class="kpi-card">
-                            <div class="kpi-label">{col1_label}</div>
-                            <div class="kpi-value">{val1_str}</div>
-                            <div class="kpi-badge text-emerald-400">↑ High Performance</div>
-                          </div>
-                          <div class="kpi-card">
-                            <div class="kpi-label">{col2_label}</div>
-                            <div class="kpi-value">{val2_str}</div>
-                            <div class="kpi-badge text-cyan-400">+100% Verified</div>
-                          </div>
-                          <div class="kpi-card">
-                            <div class="kpi-label">{col3_label}</div>
-                            <div class="kpi-value" style="font-size: 1.15rem; color: #00f2fe;">{val3_str}</div>
-                            <div class="kpi-badge text-purple-400">Peak Segment</div>
-                          </div>
-                        </div>
-                        """
-                except Exception:
-                    kpi_cards_html = ""
-
                 output_html = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -341,150 +293,30 @@ def execute_code(request: ExecuteRequest):
       display: flex;
       flex-direction: column;
       overflow-x: hidden;
-      padding: 16px;
+      padding: 12px;
     }}
     .dashboard-container {{
       background: #111116;
       border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 20px;
-      padding: 24px;
-      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }}
-    .header-bar {{
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      padding-bottom: 8px;
-    }}
-    .header-titles h2 {{
-      font-size: 1.4rem;
-      font-weight: 700;
-      color: #ffffff;
-      letter-spacing: -0.02em;
-    }}
-    .header-titles p {{
-      font-size: 0.85rem;
-      color: #71717a;
-      margin-top: 2px;
-    }}
-    .period-capsule {{
-      display: flex;
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 9999px;
-      padding: 3px;
-      gap: 4px;
-    }}
-    .period-item {{
-      font-size: 0.75rem;
-      font-weight: 600;
-      padding: 4px 12px;
-      border-radius: 9999px;
-      color: #a1a1aa;
-      cursor: pointer;
-    }}
-    .period-item.active {{
-      background: rgba(0, 242, 254, 0.15);
-      color: #00f2fe;
-      border: 1px solid rgba(0, 242, 254, 0.3);
-    }}
-    .kpi-grid {{
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 12px;
-    }}
-    .kpi-card {{
-      background: rgba(24, 24, 27, 0.7);
-      border: 1px solid rgba(255, 255, 255, 0.06);
-      border-radius: 12px;
-      padding: 14px 18px;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      gap: 4px;
-    }}
-    .kpi-label {{
-      font-size: 0.7rem;
-      font-weight: 700;
-      letter-spacing: 0.05em;
-      color: #71717a;
-      text-transform: uppercase;
-    }}
-    .kpi-value {{
-      font-size: 1.5rem;
-      font-weight: 800;
-      color: #ffffff;
-      letter-spacing: -0.03em;
-    }}
-    .kpi-badge {{
-      font-size: 0.75rem;
-      font-weight: 600;
-    }}
-    .chart-box {{
-      background: rgba(18, 18, 22, 0.6);
-      border: 1px solid rgba(255, 255, 255, 0.06);
       border-radius: 16px;
-      padding: 12px;
+      padding: 16px;
+      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.7);
       flex: 1;
       display: flex;
       flex-direction: column;
-      min-height: 400px;
+      gap: 12px;
     }}
     .plotly-graph-div {{
       width: 100% !important;
       height: 100% !important;
       flex: 1;
-    }}
-    .footer-bar {{
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding-top: 4px;
-      font-size: 0.8rem;
-    }}
-    .pill-badge {{
-      background: rgba(0, 242, 254, 0.12);
-      border: 1px solid rgba(0, 242, 254, 0.3);
-      color: #00f2fe;
-      padding: 4px 12px;
-      border-radius: 9999px;
-      font-weight: 600;
-      font-size: 0.75rem;
-    }}
-    .footer-hint {{
-      color: #71717a;
-      font-style: italic;
+      min-height: 440px;
     }}
   </style>
 </head>
 <body>
 <div class="dashboard-container">
-  <div class="header-bar">
-    <div class="header-titles">
-      <h2>Performance Analytics</h2>
-      <p>Dual-Axis Enterprise Overview</p>
-    </div>
-    <div class="period-capsule">
-      <div class="period-item active">FY 2026</div>
-      <div class="period-item">H1</div>
-      <div class="period-item">H2</div>
-    </div>
-  </div>
-
-  {kpi_cards_html}
-
-  <div class="chart-box">
-    {raw_plotly}
-  </div>
-
-  <div class="footer-bar">
-    <div class="pill-badge">Callouts Highlighting</div>
-    <div class="footer-hint">Hover data points for dynamic glassmorphic inspection</div>
-  </div>
+  {raw_plotly}
 </div>
 </body>
 </html>"""
