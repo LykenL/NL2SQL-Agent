@@ -13,5 +13,6 @@ fastapi
 uvicorn
 python-multipart  # required by /api/upload (UploadFile / File) — missing here crashed the service on boot
 requests          # imported lazily by memory_manager
+google-cloud-bigquery>=3.25  # BigQuery data source (metadata + dry-run + query)
 pinecone
 sse-starlette

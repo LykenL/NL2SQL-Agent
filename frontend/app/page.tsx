@@ -79,16 +79,46 @@ function DbConnectModal({
   onClose,
   onSkip,
 }: {
-  onConnect: (uri: string, label: string) => void;
+  onConnect: (uri: string, label: string, dataSource?: string) => void;
   onClose: () => void;
   onSkip: () => void;
 }) {
-  const [tab, setTab] = useState<"upload" | "url">("upload");
+  const [tab, setTab] = useState<"upload" | "url" | "bigquery">("upload");
   const [uriInput, setUriInput] = useState("");
   const [status, setStatus] = useState<ConnStatus>("none");
   const [errorMsg, setErrorMsg] = useState("");
   const [isDragging, setIsDragging] = useState(false);
+  const [bqSources, setBqSources] = useState<{ id: string; label: string; dialect: string }[]>([]);
+  const [bqNote, setBqNote] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Configured BigQuery datasets come from the backend env, never from the browser.
+  useEffect(() => {
+    fetch(`${API_BASE}/api/datasources`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d) return;
+        setBqSources(d.sources || []);
+        setBqNote(d.bigquery_configured ? "" : d.note || "");
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleBqConnect = async (spec: string, label: string) => {
+    setStatus("connecting");
+    setErrorMsg("");
+    try {
+      const res = await fetch(`${API_BASE}/api/schema?data_source=${encodeURIComponent(spec)}`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
+      if (!data.schema) throw new Error("Empty schema returned");
+      setStatus("ok");
+      setTimeout(() => onConnect("", label, spec), 600);
+    } catch (e: any) {
+      setStatus("error");
+      setErrorMsg(e.message || "BigQuery connection failed");
+    }
+  };
 
   // ── URL connect ──────────────────────────────────────────────────────────
   const handleUriConnect = async () => {
@@ -183,7 +213,7 @@ function DbConnectModal({
 
         {/* Tabs */}
         <div className="flex border-b border-white/10">
-          {(["upload", "url"] as const).map((t) => (
+          {(["upload", "url", "bigquery"] as const).map((t) => (
             <button
               key={t}
               onClick={() => { setTab(t); setStatus("none"); setErrorMsg(""); }}
@@ -195,8 +225,10 @@ function DbConnectModal({
             >
               {t === "upload" ? (
                 <><Upload className="w-4 h-4" /> Upload File</>
-              ) : (
+              ) : t === "url" ? (
                 <><Link2 className="w-4 h-4" /> Database URI</>
+              ) : (
+                <><Database className="w-4 h-4" /> BigQuery</>
               )}
             </button>
           ))}
@@ -246,6 +278,53 @@ function DbConnectModal({
                   <code className="text-indigo-300">.csv</code>
                 </p>
               </div>
+            </div>
+          )}
+
+          {tab === "bigquery" && (
+            <div className="space-y-3">
+              <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                Configured datasets
+              </label>
+              <p className="text-[11px] text-gray-500 leading-relaxed">
+                Datasets are configured server-side (<code className="text-indigo-300">BIGQUERY_DATASETS</code>)
+                and authenticated with a service-account file. Credentials never reach the browser.
+              </p>
+              <div className="space-y-2">
+                {bqSources.length === 0 && (
+                  <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[11px] text-amber-300">
+                    No BigQuery dataset configured on this backend.
+                    {bqNote ? <div className="mt-1 text-amber-200/70">{bqNote}</div> : null}
+                  </div>
+                )}
+                {bqSources.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => handleBqConnect(s.id, s.label)}
+                    disabled={status === "connecting"}
+                    className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg bg-white/[0.03] border border-white/10 hover:border-indigo-500/40 hover:bg-indigo-500/5 transition-all disabled:opacity-50"
+                  >
+                    <span className="flex items-center gap-2 text-sm text-gray-200">
+                      <Database className="w-4 h-4 text-sky-400" />
+                      {s.label}
+                    </span>
+                    <ChevronRight className="w-4 h-4 text-gray-600" />
+                  </button>
+                ))}
+              </div>
+              {status === "connecting" && (
+                <p className="text-[11px] text-indigo-300 flex items-center gap-1.5">
+                  <Loader2 className="w-3 h-3 animate-spin" /> Scanning INFORMATION_SCHEMA…
+                </p>
+              )}
+              {status === "ok" && (
+                <p className="text-[11px] text-emerald-300 flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3 h-3" /> Connected. Opening…
+                </p>
+              )}
+              {errorMsg && (
+                <p className="text-[11px] text-rose-400 break-words">{errorMsg}</p>
+              )}
             </div>
           )}
 
@@ -347,15 +426,18 @@ export default function Home() {
 
   // ── DB connection state ─────────────────────────────────────────────────
   const [dbUri, setDbUri] = useState<string>("");
+  const [dataSource, setDataSource] = useState<string>("");  // e.g. "bigquery:proj.dataset"
   const [dbLabel, setDbLabel] = useState<string>("Default DB");
   const [dbConnected, setDbConnected] = useState<ConnStatus>("none");
   const [showDbModal, setShowDbModal] = useState(true);
 
   // ── Load schema ─────────────────────────────────────────────────────────
-  const loadSchema = useCallback((uri?: string) => {
+  const loadSchema = useCallback((uri?: string, ds?: string) => {
     setSchemaObj(null);
     setSchemaText("Loading schema…");
-    const url = uri
+    const url = ds
+      ? `${API_BASE}/api/schema?data_source=${encodeURIComponent(ds)}`
+      : uri
       ? `${API_BASE}/api/schema?db_uri=${encodeURIComponent(uri)}`
       : `${API_BASE}/api/schema`;
 
@@ -407,8 +489,9 @@ export default function Home() {
   }, [loadSchema]);
 
   // ── Handle DB connection from modal ────────────────────────────────────
-  const handleConnect = (uri: string, label: string) => {
+  const handleConnect = (uri: string, label: string, dataSourceId?: string) => {
     setDbUri(uri);
+    setDataSource(dataSourceId || "");
     setDbLabel(label);
     setDbConnected("ok");
     setShowDbModal(false);
@@ -417,7 +500,7 @@ export default function Home() {
     setActiveCode("");
     setRenderHtml("");
     setRenderError("");
-    loadSchema(uri);
+    loadSchema(uri, dataSourceId);
   };
 
   // ── Skip: use default DB (schema already loading on mount) ─────────────
@@ -438,7 +521,11 @@ export default function Home() {
       const res = await fetch(`${API_BASE}/api/execute`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: codeToRun, db_uri: dbUri || undefined }),
+        body: JSON.stringify({
+          code: codeToRun,
+          db_uri: dbUri || undefined,
+          data_source: dataSource || undefined,
+        }),
       });
       const data = await res.json();
       if (data.error) {
@@ -470,6 +557,7 @@ export default function Home() {
           session_id: sessionId,
           message: text,
           db_uri: dbUri || undefined,
+          data_source: dataSource || undefined,
         }),
       });
 

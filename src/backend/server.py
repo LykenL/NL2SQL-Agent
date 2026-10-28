@@ -2,6 +2,7 @@ import os
 import sys
 import uuid
 import shutil
+from typing import Any
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -15,6 +16,12 @@ from src.core.db_reader import extract_db_schema
 from src.core.agent_loop import run_agent_loop
 from src.core.agent_tools import create_agent_tools
 from src.core.semantic_registry import Metric, SemanticRegistry, seed_chinook_demo
+from src.core.datasource import (
+    BigQueryDataSource,
+    SqlDataSource,
+    configured_bigquery_targets,
+    source_from_spec,
+)
 
 app = FastAPI(title="Data Copilot API (V2)")
 
@@ -34,7 +41,8 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 class ChatRequest(BaseModel):
     session_id: str
     message: str
-    db_uri: str = None
+    db_uri: str | None = None
+    data_source: str | None = None  # "bigquery:project.dataset" or empty for db_uri
 
 
 def _build_sha() -> str:
@@ -55,9 +63,26 @@ async def health_check():
     }
 
 
+@app.get("/api/datasources")
+def list_data_sources():
+    """Data sources the UI may connect to. BigQuery targets come from env."""
+    bq = configured_bigquery_targets()
+    return {
+        "sources": bq,
+        "bigquery_configured": bool(bq),
+        "service_account": bool(os.getenv("GOOGLE_APPLICATION_CREDENTIALS")),
+        "note": (
+            "Set BIGQUERY_DATASETS=project.dataset and mount the service-account JSON, "
+            "pointing GOOGLE_APPLICATION_CREDENTIALS at it."
+        ),
+    }
+
+
 @app.get("/api/schema")
-def get_schema(db_uri: str = None):
+def get_schema(db_uri: str | None = None, data_source: str | None = None):
     try:
+        if data_source:
+            return {"schema": source_from_spec(data_source).schema_json()}
         uri = db_uri or os.getenv("DATABASE_URL", "sqlite:///examples/databases/company.db")
         if uri and uri.startswith("postgres://"):
             uri = uri.replace("postgres://", "postgresql://", 1)
@@ -136,7 +161,13 @@ def chat(request: ChatRequest):
     uri = request.db_uri or os.getenv("DATABASE_URL", "sqlite:///examples/databases/company.db")
     if uri and uri.startswith("postgres://"):
         uri = uri.replace("postgres://", "postgresql://", 1)
-    tools, tool_map = create_agent_tools(uri)
+
+    try:
+        data_source = source_from_spec(request.data_source, uri) if request.data_source else SqlDataSource(uri)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Bad data source: {e}")
+
+    tools, tool_map = create_agent_tools(source=data_source)
 
     trace: dict = {}
     try:
@@ -145,8 +176,9 @@ def chat(request: ChatRequest):
             request.session_id,
             tools,
             tool_map,
-            db_uri=uri,
+            db_uri=None if isinstance(data_source, BigQueryDataSource) else uri,
             trace=trace,
+            data_source=data_source,
         )
 
         return {
@@ -228,7 +260,8 @@ async def list_sessions():
 
 class ExecuteRequest(BaseModel):
     code: str
-    db_uri: str = None  # Now accepts db_uri so the render pane uses the correct database
+    db_uri: str | None = None  # so the render pane uses the correct database
+    data_source: str | None = None  # "bigquery:project.dataset"
 
 
 @app.post("/api/execute")
@@ -239,12 +272,20 @@ def execute_code(request: ExecuteRequest):
 
     code = request.code
 
-    # Resolve the database URI: prefer the one sent by the frontend, fall back to env
+    # Resolve the data source: BigQuery spec, else a SQLAlchemy URI.
     uri = request.db_uri or os.getenv("DATABASE_URL", "sqlite:///examples/databases/company.db")
     if uri and uri.startswith("postgres://"):
         uri = uri.replace("postgres://", "postgresql://", 1)
 
-    local_vars = {"DATABASE_URI": uri, "db_uri": uri}
+    try:
+        data_source = source_from_spec(request.data_source, uri) if request.data_source else SqlDataSource(uri)
+    except Exception as e:
+        return {"html": "", "error": f"Bad data source: {e}", "error_detail": "", "stdout": ""}
+
+    local_vars: dict[str, Any] = {"ds": data_source}
+    if isinstance(data_source, SqlDataSource):
+        local_vars["DATABASE_URI"] = uri
+        local_vars["db_uri"] = uri
 
     output_html = ""
     error_msg = ""

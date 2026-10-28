@@ -43,6 +43,7 @@ def run_agent_loop(
     tool_map: dict,
     db_uri: str | None = None,
     trace: dict | None = None,
+    data_source=None,
 ):
     """trace (optional, mutated in place) reports what the semantic layer did:
     {"metrics": [...], "blocked": n, "warned": n}."""
@@ -180,6 +181,17 @@ You have access to tools to fetch the database schema and execute Python code.
         trace["blocked"] = 0
         trace["warned"] = 0
 
+    if data_source is not None:
+        system_instruction += (
+            "\n\n## DATA SOURCE\n"
+            f"You are querying `{data_source.label}`. {data_source.dialect_notes()}\n"
+        )
+        if getattr(data_source, "supports_estimates", False):
+            system_instruction += (
+                "This source bills by bytes scanned. Call `estimate_query` before any query that "
+                "might read more than a few MB, and prefer partition filters and narrow column lists.\n"
+            )
+
     if active_metrics and registry is not None:
         system_instruction += registry.prompt_block(active_metrics)
         system_instruction += (
@@ -244,6 +256,19 @@ You have access to tools to fetch the database schema and execute Python code.
                     fargs = json.loads(t.function.arguments)
                 except Exception:
                     fargs = {}
+                if fname == "run_query" and fargs.get("sql"):
+                    # The Generated Script pane must stay re-runnable even when the
+                    # agent answered with a plain SQL tool call (typical on BigQuery).
+                    import json as _json
+
+                    _rows = fargs.get("max_rows", 1000)
+                    last_executed_code = (
+                        "sql = " + _json.dumps(fargs["sql"]) + "\n"
+                        "df = ds.run(sql, max_rows=" + str(_rows) + ")\n"
+                        "print(f'rows={len(df)}')\n"
+                        "print(df.to_string(index=False))"
+                    )
+
                 if fname == "execute_python_code":
                     candidate = fargs.get("code_string", "")
                     last_executed_code = candidate or last_executed_code
