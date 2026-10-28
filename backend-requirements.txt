@@ -11,5 +11,7 @@ pymysql
 
 fastapi
 uvicorn
+python-multipart  # required by /api/upload (UploadFile / File) — missing here crashed the service on boot
+requests          # imported lazily by memory_manager
 pinecone
 sse-starlette
