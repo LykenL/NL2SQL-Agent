@@ -1,10 +1,12 @@
 import os
 import re
+import sys
 import json
 import uuid
 import time
 from openai import OpenAI
 from src.core.memory_manager import SQLiteMemory, VectorMemory
+from src.core.semantic_registry import SemanticRegistry, format_violations
 from src.agents.compression_agent import compress_session_memory
 
 # ── Chat-cleanliness guard ────────────────────────────────────────────────────
@@ -34,10 +36,30 @@ def strip_code_fences(text: str, hint: str = "") -> str:
     return cleaned
 
 
-def run_agent_loop(user_message: str, session_id: str, tools_schema: list, tool_map: dict):
+def run_agent_loop(
+    user_message: str,
+    session_id: str,
+    tools_schema: list,
+    tool_map: dict,
+    db_uri: str | None = None,
+):
     sqlite_mem = SQLiteMemory()
     vector_mem = VectorMemory()
-    
+
+    # ── Confirmed business definitions for this question ─────────────────────
+    # Enforcement is on by default; SEMANTIC_ENFORCE=off disables both the
+    # prompt block and the pre-execution check (used for A/B measurement).
+    enforce = os.getenv("SEMANTIC_ENFORCE", "on").lower() not in ("0", "off", "false")
+    registry = None
+    active_metrics: list = []
+    if enforce:
+        try:
+            registry = SemanticRegistry()
+            active_metrics = registry.resolve(user_message)
+        except Exception as exc:  # a broken registry must never block analysis
+            print(f"[semantic] registry unavailable: {exc}", file=sys.stderr)
+            registry, active_metrics = None, []
+
     client = OpenAI(
         api_key=os.getenv('OLLAMA_API_KEY', 'ollama'), 
         base_url=os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434/v1'),
@@ -150,6 +172,14 @@ You have access to tools to fetch the database schema and execute Python code.
 10. Explain the final result clearly to the user in their language.
 """
 
+    if active_metrics and registry is not None:
+        system_instruction += registry.prompt_block(active_metrics)
+        system_instruction += (
+            "11. Definitions above are ENFORCED before your code runs. Computing an active metric "
+            "from a forbidden alternative is rejected with an error you must fix. If you believe a "
+            "definition is wrong, say so in your final answer — do not silently substitute your own."
+        )
+
     messages = [{"role": "system", "content": system_instruction}]
     history = sqlite_mem.get_recent_context(session_id, limit=10)
     for msg in history:
@@ -207,9 +237,27 @@ You have access to tools to fetch the database schema and execute Python code.
                 except Exception:
                     fargs = {}
                 if fname == "execute_python_code":
-                    last_executed_code = fargs.get("code_string", last_executed_code)
+                    candidate = fargs.get("code_string", "")
+                    last_executed_code = candidate or last_executed_code
+
+                    # Pre-execution enforcement of confirmed definitions.
+                    if active_metrics and registry is not None:
+                        violations = registry.validate(candidate, active_metrics)
+                        blocked = [v for v in violations if v["severity"] == "block"]
+                        if blocked:
+                            res = format_violations(blocked)
+                            tool_results_history.append(res)
+                            messages.append({"role": "tool", "tool_call_id": t.id,
+                                             "name": fname, "content": res})
+                            continue
+
                 if fname in tool_map:
                     res = tool_map[fname](**fargs)
+                    if fname == "execute_python_code" and active_metrics and registry is not None:
+                        warns = [v for v in registry.validate(fargs.get("code_string", ""), active_metrics)
+                                 if v["severity"] != "block"]
+                        if warns:
+                            res = str(res) + "\n\n" + format_violations(warns)
                 else:
                     res = "Tool not found"
                 tool_results_history.append(str(res))

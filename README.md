@@ -83,7 +83,25 @@ sqlite:////Users/lykenl/Documents/local_agent/data_copilot/databases/Chinook_Sql
 *   **Secure `exec()` Sandbox**: A local execution environment that intercepts `stdout`, captures every DataFrame in scope, and blocks destructive SQL (`DROP`, `DELETE`, `UPDATE`) at the AST/regex level — read-only by construction.
 *   **Script capture**: the script that actually ran is taken from the `execute_python_code` tool call and rendered in the **Generated Script** panel. Chat replies are scrubbed of code fences server-side and client-side, so code never appears in the conversation.
 
-### 2. Dual-Engine Cognitive Memory Architecture
+### 2. Semantic Metric Registry (confirmed definitions, enforced)
+Business definitions live in `data/semantic/registry.db` with an expression, a
+confirmation trail and an evidence query. Matching definitions are injected into
+the prompt, and a generated script that computes an active metric from a
+forbidden alternative column is **blocked before execution**. See
+[`docs/semantic_layer.md`](docs/semantic_layer.md).
+
+```bash
+python scripts/semantic_admin.py seed-chinook
+python scripts/semantic_admin.py confirm revenue --by you --evidence q_001
+python scripts/semantic_admin.py resolve "今年的营收是多少"
+```
+
+Measured on the bundled Chinook DB, 10 runs across 5 phrasings all return the
+same number — so the registry's value there is enforcement and provenance, not
+answer stability. Run `scripts/probe_definition_variance.py` on your own schema
+before assuming otherwise.
+
+### 3. Dual-Engine Cognitive Memory Architecture
 *   **Episodic Memory (Short-Term)**: **SQLite** records every user/assistant turn per session.
 *   **Semantic Memory (Long-Term)**: **ChromaDB** persists distilled logic.
 *   **Asynchronous Compression Agent**: a second background LLM agent digests raw SQLite logs, extracts entities/actions/logic, and embeds them with `all-MiniLM-L6-v2`.

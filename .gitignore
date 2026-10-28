@@ -29,3 +29,6 @@ venv/
 
 # MacOS
 .DS_Store
+
+# Semantic registry runtime data
+data/semantic/

@@ -14,6 +14,7 @@ from src.core.memory_manager import SQLiteMemory, VectorMemory
 from src.core.db_reader import extract_db_schema
 from src.core.agent_loop import run_agent_loop
 from src.core.agent_tools import create_agent_tools
+from src.core.semantic_registry import Metric, SemanticRegistry, seed_chinook_demo
 
 app = FastAPI(title="Data Copilot API (V2)")
 
@@ -129,7 +130,8 @@ def chat(request: ChatRequest):
             request.message,
             request.session_id,
             tools,
-            tool_map
+            tool_map,
+            db_uri=uri,
         )
 
         return {
@@ -140,6 +142,64 @@ def chat(request: ChatRequest):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Semantic metric registry ─────────────────────────────────────────────────
+class MetricPayload(BaseModel):
+    id: str
+    display_name: str
+    expr: str
+    aliases: list[str] = []
+    grain: str = ""
+    filters: str = ""
+    forbidden_columns: list[str] = []
+    owner: str = ""
+    source: str = ""
+
+
+@app.get("/api/metrics")
+def list_metrics(status: str | None = None):
+    reg = SemanticRegistry()
+    return {"metrics": [m.to_dict() for m in reg.list(status=status)]}
+
+
+@app.post("/api/metrics")
+def create_metric(payload: MetricPayload):
+    """Create or update a definition as a draft."""
+    reg = SemanticRegistry()
+    metric = reg.upsert(Metric(**payload.model_dump()))
+    return metric.to_dict()
+
+
+@app.post("/api/metrics/{metric_id}/confirm")
+def confirm_metric(metric_id: str, by: str = "unknown", evidence_query_id: str = ""):
+    reg = SemanticRegistry()
+    try:
+        return reg.confirm(metric_id, by=by, evidence_query_id=evidence_query_id).to_dict()
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"metric '{metric_id}' not found")
+
+
+@app.post("/api/metrics/{metric_id}/stale")
+def stale_metric(metric_id: str):
+    reg = SemanticRegistry()
+    try:
+        return reg.mark_stale(metric_id).to_dict()
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"metric '{metric_id}' not found")
+
+
+@app.get("/api/metrics/resolve")
+def resolve_metrics(q: str, limit: int = 3):
+    reg = SemanticRegistry()
+    return {"matches": [m.to_dict() for m in reg.resolve(q, limit=limit)]}
+
+
+@app.post("/api/metrics/seed")
+def seed_metrics():
+    """Seed the bundled Chinook definitions as drafts (idempotent)."""
+    reg = SemanticRegistry()
+    return {"metrics": [m.to_dict() for m in seed_chinook_demo(reg)]}
 
 
 @app.get("/api/sessions")
