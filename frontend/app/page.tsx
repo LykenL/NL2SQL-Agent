@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DefinitionsPanel, type MetricDef } from "@/components/definitions-panel";
 import {
   Terminal,
   Code2,
@@ -27,6 +28,8 @@ import {
   HardDrive,
   X,
   GripVertical,
+  BookOpen,
+  ShieldAlert,
 } from "lucide-react";
 import {
   Panel,
@@ -325,7 +328,13 @@ const stripCodeFences = (text: string): string => {
 export default function Home() {
   const [schemaObj, setSchemaObj] = useState<any>(null);
   const [schemaText, setSchemaText] = useState<string>("Loading schema…");
-  const [messages, setMessages] = useState<{ role: string; content: string }[]>([]);
+  const [messages, setMessages] = useState<{
+    role: string;
+    content: string;
+    metrics?: MetricDef[];
+    blocked?: number;
+  }[]>([]);
+  const [showDefs, setShowDefs] = useState(false);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [activeCode, setActiveCode] = useState<string>("");
@@ -478,7 +487,12 @@ export default function Home() {
 
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: stripCodeFences(raw) },
+        {
+          role: "assistant",
+          content: stripCodeFences(raw),
+          metrics: data.metrics_used || [],
+          blocked: data.blocked || 0,
+        },
       ]);
 
       if (codeToRun) {
@@ -509,6 +523,12 @@ export default function Home() {
     <div className="h-screen bg-[#050505] text-gray-100 flex flex-col font-sans selection:bg-indigo-500/30 overflow-hidden">
 
       {/* DB Connect Modal */}
+      <DefinitionsPanel
+        apiBase={API_BASE}
+        open={showDefs}
+        onClose={() => setShowDefs(false)}
+      />
+
       {showDbModal && (
         <DbConnectModal
           onConnect={handleConnect}
@@ -548,6 +568,15 @@ export default function Home() {
             <span className="max-w-[180px] truncate">
               {dbConnected === "ok" ? dbLabel : "Connect DB"}
             </span>
+          </button>
+
+          <button
+            onClick={() => setShowDefs(true)}
+            title="Confirmed metric definitions"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10 transition-all"
+          >
+            <BookOpen className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Definitions</span>
           </button>
 
           <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 shadow-inner text-gray-500">
@@ -695,6 +724,34 @@ export default function Home() {
                             {msg.role === "assistant" ? stripCodeFences(msg.content) : msg.content}
                           </ReactMarkdown>
                         </div>
+
+                        {msg.role === "assistant" && (msg.metrics?.length || msg.blocked) ? (
+                          <div className="flex flex-wrap items-center gap-1.5 mt-3 pt-3 border-t border-white/10">
+                            <span className="text-[10px] uppercase tracking-wide text-gray-500 mr-1">
+                              Definitions applied
+                            </span>
+                            {msg.metrics?.map((m) => (
+                              <button
+                                key={m.id}
+                                onClick={() => setShowDefs(true)}
+                                title={m.expr}
+                                className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${
+                                  m.status === "confirmed"
+                                    ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20"
+                                    : "bg-amber-500/10 border-amber-500/30 text-amber-300 hover:bg-amber-500/20"
+                                }`}
+                              >
+                                {m.display_name}
+                              </button>
+                            ))}
+                            {msg.blocked ? (
+                              <span className="text-[10px] px-2 py-0.5 rounded-full border bg-rose-500/10 border-rose-500/30 text-rose-300 flex items-center gap-1">
+                                <ShieldAlert className="w-2.5 h-2.5" />
+                                {msg.blocked} blocked
+                              </span>
+                            ) : null}
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   ))}

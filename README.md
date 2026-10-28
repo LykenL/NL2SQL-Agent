@@ -8,7 +8,7 @@
 | :--- | :--- |
 | Frontend | Next.js + React + Tailwind, dark "fintech dashboard" UI (`frontend/`) |
 | API | FastAPI (`src/backend/server.py`) |
-| Agent core | OpenAI-compatible native tool calling (`src/core/agent_loop.py`) |
+| Agent core | OpenAI-compatible native tool calling (`src/core/agent_loop.py`), model via `AGENT_MODEL` (default `nemotron-3-super:cloud`) |
 | Execution | `exec()` sandbox with stdout capture (`src/core/executor.py`) |
 | Plotting | `plotly.graph_objects` (`fig`) + `altair` (`chart`) |
 | Memory | SQLite (episodic) + ChromaDB (semantic) |
@@ -89,6 +89,10 @@ confirmation trail and an evidence query. Matching definitions are injected into
 the prompt, and a generated script that computes an active metric from a
 forbidden alternative column is **blocked before execution**. See
 [`docs/semantic_layer.md`](docs/semantic_layer.md).
+
+Confirmed definitions show up as badges under each answer, and the
+**Definitions** button in the header opens a panel to review, confirm or retire
+them and to test which definitions a question would match.
 
 ```bash
 python scripts/semantic_admin.py seed-chinook

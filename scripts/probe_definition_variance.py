@@ -29,12 +29,18 @@ from src.core.executor import safe_execute  # noqa: E402
 
 DEFAULT_DB = "sqlite:////Users/lykenl/Documents/local_agent/data_copilot/databases/Chinook_Sqlite.sqlite"
 
+# Deliberately informal / business-speak, not analyst-speak: executives and ops
+# staff do not say "aggregate the revenue column". Some are ambiguous on purpose
+# (no time window, "GMV", "流水") because that is where definitions drift.
 PHRASINGS = [
-    "Chinook 数据库的营收总额是多少？只要一个数字。",
-    "这个库的销售额总共多少？只要一个数字。",
-    "帮我算一下总收入，给个总数就行。",
-    "What is the total revenue in this database? One number only.",
-    "卖唱片一共卖了多少钱？直接给数字。",
+    "老板问我这生意到底挣了多少，给我个准数。",
+    "把销售汇总一下报给总部，总共多少？",
+    "库里这些单子加起来是多少钱？",
+    "帮我看看生意怎么样，一共进了多少账？",
+    "咱们的 GMV 是多少？",
+    "What's our top-line number? Just the figure.",
+    "流水一共多少？别给我图表，就要个数字。",
+    "客户贡献的收入总共是多少？",
 ]
 
 COLUMN_SIGNALS = ["UnitPrice", "Quantity", "Total"]
@@ -46,15 +52,29 @@ def columns_used(script: str) -> list[str]:
 
 
 def numeric_answer(text: str) -> float | None:
-    nums = []
+    """
+    Pull the headline figure out of a reply.
+
+    Years (1900-2100 written as bare integers) are the main false positive — a
+    reply saying "2025 年营收 2,328.60" must not report 2025 as the answer, so
+    dotted/separated amounts win over bare integers and 4-digit years are
+    dropped entirely.
+    """
+    dotted: list[float] = []
+    plain: list[float] = []
     for raw in re.findall(r"[-+]?\d[\d,]*\.?\d*", text or ""):
+        token = raw.replace(",", "")
         try:
-            nums.append(float(raw.replace(",", "")))
+            value = float(token)
         except ValueError:
-            pass
-    # revenue answers on this database are in the thousands; ignore row counts
-    big = [n for n in nums if n >= 100]
-    return big[-1] if big else (nums[-1] if nums else None)
+            continue
+        if "." in raw or "," in raw:
+            dotted.append(value)
+        elif not (1900 <= value <= 2100) or value % 1 != 0:
+            plain.append(value)
+    candidates = dotted or plain
+    big = [n for n in candidates if n >= 100]
+    return big[-1] if big else (candidates[-1] if candidates else None)
 
 
 def main() -> None:
@@ -63,7 +83,11 @@ def main() -> None:
     ap.add_argument("--runs", type=int, default=1, help="runs per phrasing")
     ap.add_argument("--phrasings", type=int, default=len(PHRASINGS))
     ap.add_argument("--out", default="")
+    ap.add_argument("--model", default="", help="override AGENT_MODEL for this run")
     args = ap.parse_args()
+
+    if args.model:
+        os.environ["AGENT_MODEL"] = args.model
 
     tools, tool_map = create_agent_tools(args.db)
     runs = []

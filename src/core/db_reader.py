@@ -23,7 +23,11 @@ def extract_db_schema(db_path: str = "sqlite:///company.db", force_refresh: bool
             return _schema_cache[db_path]
     
     try:
-        engine = create_engine(db_path, connect_args={'connect_timeout': 10})
+        # connect_timeout is a psycopg2/mysql argument; sqlite3 rejects it.
+        connect_args = {}
+        if db_path.startswith(("postgres", "mysql")):
+            connect_args["connect_timeout"] = 10
+        engine = create_engine(db_path, connect_args=connect_args)
         # The inspector is SQLAlchemy's built-in database scanner
         inspector = inspect(engine)
         

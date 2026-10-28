@@ -125,6 +125,7 @@ def chat(request: ChatRequest):
         uri = uri.replace("postgres://", "postgresql://", 1)
     tools, tool_map = create_agent_tools(uri)
 
+    trace: dict = {}
     try:
         final_response, sql, df, exec_time = run_agent_loop(
             request.message,
@@ -132,13 +133,17 @@ def chat(request: ChatRequest):
             tools,
             tool_map,
             db_uri=uri,
+            trace=trace,
         )
 
         return {
             "response": final_response,
             "sql_executed": sql,
             "execution_time_seconds": exec_time,
-            "rows_returned": len(df) if df is not None else 0
+            "rows_returned": len(df) if df is not None else 0,
+            "metrics_used": trace.get("metrics", []),
+            "blocked": trace.get("blocked", 0),
+            "warned": trace.get("warned", 0),
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

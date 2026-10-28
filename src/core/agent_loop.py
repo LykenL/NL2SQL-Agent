@@ -42,7 +42,10 @@ def run_agent_loop(
     tools_schema: list,
     tool_map: dict,
     db_uri: str | None = None,
+    trace: dict | None = None,
 ):
+    """trace (optional, mutated in place) reports what the semantic layer did:
+    {"metrics": [...], "blocked": n, "warned": n}."""
     sqlite_mem = SQLiteMemory()
     vector_mem = VectorMemory()
 
@@ -172,6 +175,11 @@ You have access to tools to fetch the database schema and execute Python code.
 10. Explain the final result clearly to the user in their language.
 """
 
+    if trace is not None:
+        trace["metrics"] = [m.to_dict() for m in active_metrics]
+        trace["blocked"] = 0
+        trace["warned"] = 0
+
     if active_metrics and registry is not None:
         system_instruction += registry.prompt_block(active_metrics)
         system_instruction += (
@@ -217,7 +225,7 @@ You have access to tools to fetch the database schema and execute Python code.
             })
             
         response = client.chat.completions.create(
-            model="gemma4:31b-cloud",
+            model=os.getenv("AGENT_MODEL", "nemotron-3-super:cloud"),
             messages=messages,
             tools=tools_schema,
             temperature=0.0
@@ -245,6 +253,8 @@ You have access to tools to fetch the database schema and execute Python code.
                         violations = registry.validate(candidate, active_metrics)
                         blocked = [v for v in violations if v["severity"] == "block"]
                         if blocked:
+                            if trace is not None:
+                                trace["blocked"] = trace.get("blocked", 0) + 1
                             res = format_violations(blocked)
                             tool_results_history.append(res)
                             messages.append({"role": "tool", "tool_call_id": t.id,
@@ -257,6 +267,8 @@ You have access to tools to fetch the database schema and execute Python code.
                         warns = [v for v in registry.validate(fargs.get("code_string", ""), active_metrics)
                                  if v["severity"] != "block"]
                         if warns:
+                            if trace is not None:
+                                trace["warned"] = trace.get("warned", 0) + 1
                             res = str(res) + "\n\n" + format_violations(warns)
                 else:
                     res = "Tool not found"
