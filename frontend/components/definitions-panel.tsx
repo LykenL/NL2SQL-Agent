@@ -47,7 +47,12 @@ export function DefinitionsPanel({ apiBase, open, onClose, onChanged }: Props) {
     setError("");
     try {
       const res = await fetch(`${apiBase}/api/metrics`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (res.status === 404) {
+        throw new Error(
+          `This API build has no /api/metrics (HTTP 404) — the backend at ${apiBase} predates the semantic layer. Redeploy it, then reload.`
+        );
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status} from ${apiBase}/api/metrics`);
       const data = await res.json();
       setMetrics(data.metrics || []);
     } catch (e) {

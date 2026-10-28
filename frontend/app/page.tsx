@@ -553,10 +553,10 @@ export default function Home() {
           <button
             onClick={() => setShowDbModal(true)}
             title="Click to connect or change database"
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all hover:opacity-80 ${
+            className={`shrink-0 flex items-center gap-2 px-4 py-2 rounded-full border text-[13px] font-semibold transition-all hover:brightness-110 shadow-sm ${
               dbConnected === "ok"
-                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
-                : "bg-indigo-500/15 border-indigo-500/40 text-indigo-300 animate-pulse"
+                ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-200"
+                : "bg-indigo-600/25 border-indigo-400/50 text-indigo-100 animate-pulse"
             }`}
           >
             <div className={`w-2 h-2 rounded-full ${
@@ -565,7 +565,7 @@ export default function Home() {
                 : "bg-indigo-400 shadow-[0_0_6px_rgba(99,102,241,0.8)]"
             }`} />
             <Database className="w-3.5 h-3.5" />
-            <span className="max-w-[180px] truncate">
+            <span className="max-w-[160px] truncate">
               {dbConnected === "ok" ? dbLabel : "Connect DB"}
             </span>
           </button>
@@ -573,13 +573,13 @@ export default function Home() {
           <button
             onClick={() => setShowDefs(true)}
             title="Confirmed metric definitions"
-            className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10 transition-all"
+            className="shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.03] border border-white/10 text-gray-400 hover:text-gray-200 hover:bg-white/[0.07] transition-all"
           >
-            <BookOpen className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Definitions</span>
+            <BookOpen className="w-3.5 h-3.5 text-indigo-400/80" />
+            <span className="hidden sm:inline">Definitions</span>
           </button>
 
-          <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 shadow-inner text-gray-500">
+          <span className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 shadow-inner text-gray-500">
             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
             API Connected
           </span>
