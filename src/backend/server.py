@@ -37,9 +37,22 @@ class ChatRequest(BaseModel):
     db_uri: str = None
 
 
+def _build_sha() -> str:
+    """Commit the running container was built from (Render/Vercel inject it)."""
+    sha = os.getenv("RENDER_GIT_COMMIT") or os.getenv("VERCEL_GIT_COMMIT_SHA") or ""
+    return sha[:12] or "dev"
+
+
 @app.get("/api/health")
 async def health_check():
-    return {"status": "ok", "message": "FastAPI is running"}
+    # `capabilities` lets a frontend detect a stale backend in one request
+    # instead of discovering missing routes as 404s.
+    return {
+        "status": "ok",
+        "message": "FastAPI is running",
+        "version": _build_sha(),
+        "capabilities": ["chat", "execute", "upload", "schema", "metrics"],
+    }
 
 
 @app.get("/api/schema")
