@@ -541,6 +541,11 @@ export default function Home() {
         setRenderError(data.error);
       } else {
         setRenderHtml(data.html);
+        // The canvas sits below a long answer; bring it into view so a finished
+        // chart is never mistaken for "nothing happened".
+        setTimeout(() => {
+          document.getElementById("analytics-canvas")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 350);
       }
     } catch (err: any) {
       setRenderError(err.message || "Execution failed");
@@ -926,7 +931,7 @@ export default function Home() {
               </div>
 
               {/* Lower Section: Analytics Canvas & Script (Natural Flow on Same Scrollbar) */}
-              <div className="flex flex-col bg-[#0a0a0a] min-h-[560px]">
+              <div id="analytics-canvas" className="flex flex-col bg-[#0a0a0a] min-h-[560px] scroll-mt-20">
                 <Tabs defaultValue="render" className="flex-1 flex flex-col">
                   <div className="px-6 py-3.5 border-b border-white/10 bg-[#0d0d12] flex items-center justify-between sticky top-0 z-20 shadow-md">
                     <div className="flex items-center gap-2.5">

@@ -3,7 +3,8 @@ import sys
 import uuid
 import shutil
 from typing import Any
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Request
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
@@ -24,6 +25,42 @@ from src.core.datasource import (
 )
 
 app = FastAPI(title="Data Copilot API (V2)")
+
+# If a chart never paints, say so instead of leaving an empty dark box.
+_CHART_WATCHDOG = """<script>
+(function () {
+  var deadline = Date.now() + 8000;
+  var timer = setInterval(function () {
+    var painted = document.querySelector(
+      '.plotly-graph-div svg, .plotly-graph-div canvas, .vega-embed svg, .vega-embed canvas, canvas, svg'
+    );
+    if (painted) { clearInterval(timer); return; }
+    if (Date.now() > deadline) {
+      clearInterval(timer);
+      var d = document.createElement('div');
+      d.style.cssText = 'padding:20px 24px;color:#fca5a5;font:13px/1.6 Inter,system-ui,sans-serif';
+      d.textContent = '图表没有渲染出来：绘图库没有加载成功（网络拦截或脚本报错）。点 Re-run 重试；反复失败请检查浏览器控制台。';
+      document.body.appendChild(d);
+    }
+  }, 500);
+})();
+</script>"""
+
+
+def _plotly_js_path() -> str | None:
+    """Absolute path to the plotly bundle that ships with the installed package."""
+    import plotly
+
+    candidate = os.path.join(os.path.dirname(plotly.__file__), "package_data", "plotly.min.js")
+    return candidate if os.path.exists(candidate) else None
+
+
+@app.get("/static/plotly.min.js")
+def plotly_js():
+    path = _plotly_js_path()
+    if not path:
+        raise HTTPException(status_code=404, detail="plotly bundle not found")
+    return FileResponse(path, media_type="application/javascript", headers={"Cache-Control": "public, max-age=86400"})
 
 app.add_middleware(
     CORSMiddleware,
@@ -378,7 +415,7 @@ class ExecuteRequest(BaseModel):
 
 
 @app.post("/api/execute")
-def execute_code(request: ExecuteRequest):
+def execute_code(http_request: Request, request: ExecuteRequest):
     import io
     import traceback
     from contextlib import redirect_stdout
@@ -509,7 +546,7 @@ def execute_code(request: ExecuteRequest):
 
                 raw_plotly = fig_to_render.to_html(
                     full_html=False,
-                    include_plotlyjs="cdn",
+                    include_plotlyjs=f"{str(http_request.base_url).rstrip('/')}/static/plotly.min.js",
                     config={
                         "displayModeBar": "hover",
                         "displaylogo": False,
@@ -691,6 +728,9 @@ def execute_code(request: ExecuteRequest):
             f"font-size:13px;line-height:1.6;white-space:pre-wrap;'>"
             f"{stdout or 'Code executed successfully but produced no output.'}</pre>"
         )
+
+    if output_html:
+        output_html = output_html.replace("</body>", _CHART_WATCHDOG + "</body>")
 
     return {
         "html": output_html,
