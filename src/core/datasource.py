@@ -271,7 +271,16 @@ def source_from_spec(spec: Optional[str], uri: Optional[str] = None) -> DataSour
     spec forms:
       None / ""                      -> SqlDataSource(uri)
       "bigquery:project.dataset"     -> BigQueryDataSource
+      "marts:project.dataset"        -> MartSource (gold only)
     """
+    if spec and spec.startswith("marts:"):
+        from src.core.mart_source import MartSource
+
+        target = spec.split(":", 1)[1]
+        project, _, dataset = target.partition(".")
+        if not project or not dataset:
+            raise ValueError(f"invalid marts spec: {spec}")
+        return MartSource(project=project, dataset=dataset)
     if spec and spec.startswith("bigquery:"):
         target = spec.split(":", 1)[1]
         project, _, dataset = target.partition(".")

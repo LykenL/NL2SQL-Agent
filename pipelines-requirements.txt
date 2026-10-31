@@ -1,0 +1,8 @@
+dbt-bigquery>=1.8
+dagster>=1.9
+dagster-dbt>=0.25
+dagster-webserver
+google-cloud-bigquery>=3.25
+pandas
+requests
+python-dotenv

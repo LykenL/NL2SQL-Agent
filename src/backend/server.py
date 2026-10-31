@@ -78,6 +78,40 @@ def list_data_sources():
     }
 
 
+@app.get("/api/marts")
+def list_marts(project: str | None = None):
+    """Published marts with freshness and the latest DQ status (for the UI)."""
+    proj = project or os.getenv("BQ_PROJECT", "woven-surface-511317-g0")
+    prefix = os.getenv("BQ_PREFIX", "data_copilot_dev")
+    from src.core.mart_source import MartSource
+
+    src = MartSource(project=proj, dataset=f"{prefix}_gold", meta_dataset=f"{prefix}_meta")
+    marts = src.freshness()
+
+    dq = {}
+    try:
+        from google.cloud import bigquery as _bq
+
+        q = f"""
+        select status, count(*) as n
+        from `{proj}.{prefix}_meta.dq_results`
+        where run_at = (select max(run_at) from `{proj}.{prefix}_meta.dq_results`)
+        group by status
+        """
+        rows = list(_bq.Client(project=proj).query(q))
+        dq = {r["status"]: r["n"] for r in rows}
+    except Exception as exc:
+        dq = {"error": str(exc)[:120]}
+
+    return {
+        "project": proj,
+        "dataset": f"{prefix}_gold",
+        "marts": marts,
+        "dq": dq,
+        "allowed": sorted(src.allowed),
+    }
+
+
 @app.get("/api/schema")
 def get_schema(db_uri: str | None = None, data_source: str | None = None):
     try:

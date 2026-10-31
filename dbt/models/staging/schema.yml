@@ -1,0 +1,35 @@
+version: 2
+
+models:
+  - name: stg_municipalities
+    description: "One row per municipality / region / district (Kolada dimension)"
+    columns:
+      - name: municipality_code
+        tests: [unique, not_null]
+      - name: municipality_name
+        tests: [not_null]
+      - name: region_type
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['municipality', 'region', 'other']
+
+  - name: stg_kpi_values
+    description: "Long-format KPI facts, one row per (kpi, year, municipality, gender)"
+    columns:
+      - name: kpi_id
+        tests: [not_null]
+      - name: year
+        tests: [not_null]
+      - name: municipality_code
+        tests: [not_null]
+      - name: gender
+        tests:
+          - accepted_values:
+              values: ['T', 'M', 'K']
+
+  - name: stg_kpi_catalog
+    description: "KPI dictionary: id -> title / description / operating area"
+    columns:
+      - name: kpi_id
+        tests: [unique, not_null]

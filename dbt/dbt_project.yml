@@ -1,0 +1,16 @@
+name: data_copilot
+version: "1.0.0"
+profile: data_copilot
+model-paths: ["models"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  data_copilot:
+    staging:
+      +materialized: view
+      +schema: silver
+    marts:
+      +materialized: table
+      +schema: gold

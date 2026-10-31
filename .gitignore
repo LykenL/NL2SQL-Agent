@@ -32,3 +32,10 @@ venv/
 
 # Semantic registry runtime data
 data/semantic/
+
+# dbt artifacts
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+.tmp_dagster_home*/
+dagster_home/

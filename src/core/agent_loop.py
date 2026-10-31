@@ -186,6 +186,8 @@ You have access to tools to fetch the database schema and execute Python code.
             "\n\n## DATA SOURCE\n"
             f"You are querying `{data_source.label}`. {data_source.dialect_notes()}\n"
         )
+        if hasattr(data_source, "freshness_text"):
+            system_instruction += f"\n数据最后刷新：{data_source.freshness_text()}\n"
         if getattr(data_source, "supports_estimates", False):
             system_instruction += (
                 "This source bills by bytes scanned. Call `estimate_query` before any query that "

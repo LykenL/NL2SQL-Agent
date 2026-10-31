@@ -83,7 +83,30 @@ sqlite:////Users/lykenl/Documents/local_agent/data_copilot/databases/Chinook_Sql
 *   **Secure `exec()` Sandbox**: A local execution environment that intercepts `stdout`, captures every DataFrame in scope, and blocks destructive SQL (`DROP`, `DELETE`, `UPDATE`) at the AST/regex level — read-only by construction.
 *   **Script capture**: the script that actually ran is taken from the `execute_python_code` tool call and rendered in the **Generated Script** panel. Chat replies are scrubbed of code fences server-side and client-side, so code never appears in the conversation.
 
-### 2. Data Sources (SQLite / Postgres / MySQL / BigQuery)
+### 2. Data Platform (bronze → silver → gold, tested)
+
+A medallion pipeline feeds the copilot, and the copilot can only read the gold
+marts:
+
+```
+Kolada API → bronze (Dagster) → silver (dbt views) → gold marts (dbt tables)
+                                                    ├── meta.dq_results / mart_freshness
+                                                    └── copilot (gold-only)
+```
+
+```bash
+dagster asset materialize -f pipelines/definitions.py --select '*'   # bronze
+cd dbt && dbt build                                                  # silver + gold + tests
+dagster asset materialize -f pipelines/definitions.py --select 'dq_results+'   # DQ ledger + gate
+```
+
+- `dq_results` appends every dbt test result; `dq_gate` **fails the run** if any
+  test failed in the latest run.
+- `GET /api/marts` returns published marts, freshness and DQ counts.
+- `MartSource` rejects any query touching `*_silver` / `*_bronze`, so "the agent
+  improvised on raw data" is not a prompt promise but a blocked code path.
+
+### 3. Data Sources (SQLite / Postgres / MySQL / BigQuery)
 
 The agent talks to a `DataSource`, not to a connection string. BigQuery is
 authenticated server-side with a service account (Render Secret File), never
@@ -91,7 +114,7 @@ exposes credentials to the browser, gets its schema from the metadata API (zero
 bytes scanned), and every query is dry-run for bytes/cost first. See
 [`docs/bigquery_source.md`](docs/bigquery_source.md).
 
-### 3. Semantic Metric Registry (confirmed definitions, enforced)
+### 4. Semantic Metric Registry (confirmed definitions, enforced)
 Business definitions live in `data/semantic/registry.db` with an expression, a
 confirmation trail and an evidence query. Matching definitions are injected into
 the prompt, and a generated script that computes an active metric from a
@@ -113,7 +136,7 @@ same number — so the registry's value there is enforcement and provenance, not
 answer stability. Run `scripts/probe_definition_variance.py` on your own schema
 before assuming otherwise.
 
-### 4. Dual-Engine Cognitive Memory Architecture
+### 5. Dual-Engine Cognitive Memory Architecture
 *   **Episodic Memory (Short-Term)**: **SQLite** records every user/assistant turn per session.
 *   **Semantic Memory (Long-Term)**: **ChromaDB** persists distilled logic.
 *   **Asynchronous Compression Agent**: a second background LLM agent digests raw SQLite logs, extracts entities/actions/logic, and embeds them with `all-MiniLM-L6-v2`.

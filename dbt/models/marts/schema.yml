@@ -1,0 +1,51 @@
+version: 2
+
+models:
+  - name: mart_municipality_population
+    description: "Population per municipality/region/year with year-over-year change — the only population product."
+    columns:
+      - name: region_year_key
+        tests: [unique, not_null]
+      - name: municipality_code
+        tests: [not_null]
+      - name: year
+        tests: [not_null]
+      - name: population
+        tests: [not_null]
+    meta:
+      owner: data-team
+      refresh: daily
+      metrics:
+        - id: total_population
+          label: 总人口
+          expr: SUM(population)
+          grain: region_year
+          expr_note: "mart_municipality_population.population 为当年人口" 
+
+  - name: mart_personnel_cost
+    description: "Personnel cost per capita joined to population, with an estimated total cost."
+    columns:
+      - name: region_year_key
+        tests: [unique, not_null]
+      - name: cost_per_capita_sek
+        tests: [not_null]
+      - name: population
+        tests: [not_null]
+    meta:
+      metrics:
+        - id: avg_cost_per_capita
+          label: 人均人事成本 (SEK)
+          expr: AVG(cost_per_capita_sek)
+          grain: region_year
+
+  - name: mart_kpi_summary
+    description: "Per-KPI, per-year, per-region-type aggregates — the KPI scorecard source."
+    columns:
+      - name: kpi_id
+        tests: [not_null]
+      - name: year
+        tests: [not_null]
+
+# Metrics live in model meta (read by the copilot's semantic registry).
+# dbt's own semantic-layer spec is still in flux, so we keep the definition next
+# to the model it describes instead of depending on a beta schema.
