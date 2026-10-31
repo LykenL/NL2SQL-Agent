@@ -1,0 +1,39 @@
+{
+  "access": [
+    {
+      "role": "WRITER",
+      "specialGroup": "projectWriters"
+    },
+    {
+      "role": "OWNER",
+      "specialGroup": "projectOwners"
+    },
+    {
+      "role": "OWNER",
+      "userByEmail": "jinxl2361418252@gmail.com"
+    },
+    {
+      "role": "READER",
+      "specialGroup": "projectReaders"
+    },
+    {
+      "role": "WRITER",
+      "userByEmail": "copilot-ci@woven-surface-511317-g0.iam.gserviceaccount.com"
+    }
+  ],
+  "creationTime": "1793429614380",
+  "datasetReference": {
+    "datasetId": "data_copilot_ci",
+    "projectId": "woven-surface-511317-g0"
+  },
+  "defaultPartitionExpirationMs": "5184000000",
+  "defaultTableExpirationMs": "5184000000",
+  "etag": "dveIJaNZg0HjGPFHxgr/wg==",
+  "id": "woven-surface-511317-g0:data_copilot_ci",
+  "kind": "bigquery#dataset",
+  "lastModifiedTime": "1793429614380",
+  "location": "US",
+  "maxTimeTravelHours": "168",
+  "selfLink": "https://bigquery.googleapis.com/bigquery/v2/projects/woven-surface-511317-g0/datasets/data_copilot_ci",
+  "type": "DEFAULT"
+}

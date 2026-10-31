@@ -3,7 +3,8 @@ version: 2
 sources:
   - name: bronze
     database: "{{ env_var('BQ_PROJECT', 'woven-surface-511317-g0') }}"
-    schema: "{{ env_var('BQ_PREFIX', 'data_copilot_dev') }}_bronze"
+    # CI reads bronze from the dev project while writing its own silver/gold.
+    schema: "{{ env_var('BQ_SOURCE_PREFIX', env_var('BQ_PREFIX', 'data_copilot_dev')) }}_bronze"
     tables:
       - name: kolada_municipalities
         loaded_at_field: ingested_at

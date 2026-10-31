@@ -1,0 +1,23 @@
+data_copilot:
+  target: "{{ env_var('DBT_TARGET', 'dev') }}"
+  outputs:
+    dev:
+      type: bigquery
+      method: oauth
+      project: "{{ env_var('BQ_PROJECT', 'woven-surface-511317-g0') }}"
+      dataset: "{{ env_var('BQ_PREFIX', 'data_copilot_dev') }}_gold"
+      location: US
+      threads: 4
+      maximum_bytes_billed: 5000000000
+
+    # CI writes to the disposable data_copilot_ci_* datasets and reads bronze
+    # from the dev project. Key file comes from the GCP_SA_JSON secret.
+    ci:
+      type: bigquery
+      method: service-account
+      keyfile: "{{ env_var('GCP_SA_JSON_PATH', '/tmp/gcp-ci.json') }}"
+      project: "{{ env_var('BQ_PROJECT', 'woven-surface-511317-g0') }}"
+      dataset: data_copilot_ci_gold
+      location: US
+      threads: 2
+      maximum_bytes_billed: 2000000000
