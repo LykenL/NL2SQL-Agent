@@ -70,5 +70,7 @@ jobs:
       - name: Install
         run: cd frontend && npm ci --silent
 
-      - name: Type check
-        run: cd frontend && npx tsc --noEmit
+      # `next build` rather than bare tsc: Next generates LayoutProps/PageProps
+      # types during the build, so a plain tsc run cannot see them.
+      - name: Build (type checks included)
+        run: cd frontend && npm run build

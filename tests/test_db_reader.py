@@ -6,25 +6,41 @@ sqlite3 does not, so every SQLite database failed with
 """
 
 import os
+import sqlite3
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src.core.db_reader import extract_db_schema  # noqa: E402
 
-CHINOOK = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "databases", "Chinook_Sqlite.sqlite")
-)
+
+def _make_db(path) -> str:
+    """A small SQLite file with a FK, built by the test (no repo fixture needed)."""
+    conn = sqlite3.connect(path)
+    conn.executescript(
+        """
+        create table artist (id integer primary key, name text not null);
+        create table album (
+            id integer primary key,
+            title text not null,
+            artist_id integer references artist(id)
+        );
+        insert into artist (name) values ('A'), ('B');
+        insert into album (title, artist_id) values ('One', 1), ('Two', 2);
+        """
+    )
+    conn.commit()
+    conn.close()
+    return f"sqlite:///{path}"
 
 
-def test_sqlite_schema_extraction():
-    uri = f"sqlite:///{CHINOOK}"
+def test_sqlite_schema_extraction(tmp_path):
+    uri = _make_db(tmp_path / "fixture.db")
     schema = extract_db_schema(uri, force_refresh=True)
     assert "Error extracting schema" not in schema, schema
-    assert '"Invoice"' in schema
-    assert '"InvoiceLine"' in schema
-    # foreign keys come through, which is what the agent needs for JOINs
-    assert "to_table" in schema
+    assert '"album"' in schema and '"artist"' in schema
+    # foreign keys are what the agent needs to write JOINs
+    assert "to_table" in schema and "artist" in schema
 
 
 def test_unknown_path_returns_error_string_not_exception():
