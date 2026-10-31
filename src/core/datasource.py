@@ -293,11 +293,28 @@ def source_from_spec(spec: Optional[str], uri: Optional[str] = None) -> DataSour
 
 
 def configured_bigquery_targets() -> list[dict]:
-    """Datasets exposed to the UI, from BIGQUERY_DATASETS="project.dataset,project.dataset2"."""
+    """
+    Data sources offered to the UI.
+
+    1. The published gold marts — always exposed when BQ_PROJECT/BQ_PREFIX are
+       set, because that is what the copilot is supposed to read. No extra
+       configuration needed.
+    2. Any raw datasets listed in BIGQUERY_DATASETS="project.dataset,...".
+    """
+    out: list[dict] = []
+
+    project = os.getenv("BQ_PROJECT", "").strip()
+    prefix = os.getenv("BQ_PREFIX", "").strip()
+    if project and prefix:
+        out.append({
+            "id": f"marts:{project}.{prefix}_gold",
+            "label": f"{prefix}_gold（已发布的 marts）",
+            "dialect": "marts",
+        })
+
     raw = os.getenv("BIGQUERY_DATASETS", "").strip()
-    out = []
     for item in filter(None, (x.strip() for x in raw.split(","))):
-        project, _, dataset = item.partition(".")
-        if project and dataset:
-            out.append({"id": f"bigquery:{project}.{dataset}", "label": item, "dialect": "bigquery"})
+        p, _, d = item.partition(".")
+        if p and d:
+            out.append({"id": f"bigquery:{p}.{d}", "label": item, "dialect": "bigquery"})
     return out

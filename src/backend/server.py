@@ -67,13 +67,15 @@ async def health_check():
 def list_data_sources():
     """Data sources the UI may connect to. BigQuery targets come from env."""
     bq = configured_bigquery_targets()
+    has_creds = bool(os.getenv("GOOGLE_APPLICATION_CREDENTIALS"))
     return {
         "sources": bq,
         "bigquery_configured": bool(bq),
-        "service_account": bool(os.getenv("GOOGLE_APPLICATION_CREDENTIALS")),
+        "service_account": has_creds,
         "note": (
-            "Set BIGQUERY_DATASETS=project.dataset and mount the service-account JSON, "
-            "pointing GOOGLE_APPLICATION_CREDENTIALS at it."
+            "No BigQuery source available. Set BQ_PROJECT + BQ_PREFIX to expose the "
+            "published marts, or BIGQUERY_DATASETS=project.dataset for a raw dataset; "
+            "credentials come from GOOGLE_APPLICATION_CREDENTIALS."
         ),
     }
 
