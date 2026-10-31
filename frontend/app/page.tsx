@@ -79,10 +79,12 @@ function DbConnectModal({
   onConnect,
   onClose,
   onSkip,
+  currentLabel,
 }: {
   onConnect: (uri: string, label: string, dataSource?: string) => void;
   onClose: () => void;
   onSkip: () => void;
+  currentLabel?: string;
 }) {
   const [tab, setTab] = useState<"upload" | "url" | "bigquery">("upload");
   const [uriInput, setUriInput] = useState("");
@@ -208,7 +210,10 @@ function DbConnectModal({
             <h2 className="text-lg font-bold text-gray-100">Connect a Database</h2>
           </div>
           <p className="text-xs text-gray-500 ml-11">
-            Upload a local file or paste a connection URI.
+            Upload a file, paste a URI, or pick a configured BigQuery dataset.
+          </p>
+          <p className="text-[11px] text-gray-600 ml-11 mt-1">
+            当前：{currentLabel || "未连接"}
           </p>
         </div>
 
@@ -407,7 +412,9 @@ const stripCodeFences = (text: string): string => {
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function Home() {
   const [schemaObj, setSchemaObj] = useState<any>(null);
-  const [schemaText, setSchemaText] = useState<string>("Loading schema…");
+  // Empty until the user actually connects something — never show the backend's
+  // default database as if it were the selected source.
+  const [schemaText, setSchemaText] = useState<string>("");
   const [messages, setMessages] = useState<{
     role: string;
     content: string;
@@ -415,6 +422,7 @@ export default function Home() {
     blocked?: number;
   }[]>([]);
   const [showDefs, setShowDefs] = useState(false);
+  const [tableFilter, setTableFilter] = useState("");
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [activeCode, setActiveCode] = useState<string>("");
@@ -477,6 +485,7 @@ export default function Home() {
           /Failed to fetch|NetworkError|Load failed/i.test(msg) || !msg
             ? "could not reach the server"
             : msg;
+        setSchemaObj(null);
         setSchemaText(`Failed to load schema: ${detail}\nAPI: ${url}`);
       }
     };
@@ -484,10 +493,9 @@ export default function Home() {
     attempt(2);
   }, []);
 
-  // Initial schema load (default DB)
-  useEffect(() => {
-    loadSchema();
-  }, [loadSchema]);
+  // No automatic schema load: the sidebar stays empty until a source is chosen.
+  // (Previously this fetched /api/schema, which the backend answers with its
+  // DATABASE_URL default — the user then saw tables they never selected.)
 
   // ── Handle DB connection from modal ────────────────────────────────────
   const handleConnect = (uri: string, label: string, dataSourceId?: string) => {
@@ -623,6 +631,7 @@ export default function Home() {
           onConnect={handleConnect}
           onClose={() => setShowDbModal(false)}
           onSkip={handleSkip}
+          currentLabel={dbConnected === "ok" ? dbLabel : ""}
         />
       )}
 
@@ -654,8 +663,8 @@ export default function Home() {
                 : "bg-indigo-400 shadow-[0_0_6px_rgba(99,102,241,0.8)]"
             }`} />
             <Database className="w-3.5 h-3.5" />
-            <span className="max-w-[160px] truncate">
-              {dbConnected === "ok" ? dbLabel : "Connect DB"}
+            <span className="max-w-[170px] truncate">
+              {dbConnected === "ok" ? dbLabel : "未连接 · 选择数据源"}
             </span>
           </button>
 
@@ -677,10 +686,7 @@ export default function Home() {
             <span className="hidden sm:inline">Definitions</span>
           </button>
 
-          <span className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 shadow-inner text-gray-500">
-            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
-            API Connected
-          </span>
+
         </div>
       </header>
 
@@ -690,9 +696,14 @@ export default function Home() {
           {/* Left Pane: Schema (Data Context) */}
           <Panel defaultSize={22} minSize={18} id="schema-panel" className="flex flex-col min-h-0 bg-[#0a0a0a] shadow-2xl z-20">
           <div className="p-4 border-b border-white/10 flex items-center justify-between bg-[#121212] shrink-0">
-            <div className="flex items-center gap-2">
-              <Database className="w-4 h-4 text-indigo-400" />
-              <h2 className="text-sm font-bold text-gray-200 uppercase tracking-wider">Data Context</h2>
+            <div className="flex items-center gap-2 min-w-0">
+              <Database className="w-4 h-4 text-indigo-400 shrink-0" />
+              <div className="min-w-0">
+                <h2 className="text-sm font-bold text-gray-200 uppercase tracking-wider">Data Context</h2>
+                <p className="text-[10px] text-gray-500 truncate">
+                  {dbConnected === "ok" ? dbLabel : "未连接"}
+                </p>
+              </div>
             </div>
             <button
               onClick={() => setShowDbModal(true)}
@@ -705,9 +716,33 @@ export default function Home() {
           </div>
           <ScrollArea className="flex-1 min-h-0 bg-[#050505]">
             <div className="p-4">
-              {schemaObj ? (
+              {!schemaObj && !schemaText ? (
+                <div className="py-10 text-center space-y-3">
+                  <Database className="w-7 h-7 text-gray-700 mx-auto" />
+                  <p className="text-xs text-gray-500">还没有连接数据源</p>
+                  <button
+                    onClick={() => setShowDbModal(true)}
+                    className="px-3 py-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/30 text-[11px] text-indigo-300 hover:bg-indigo-500/20"
+                  >
+                    选择数据源
+                  </button>
+                  <p className="text-[10px] text-gray-600 leading-relaxed px-3">
+                    连接后会在这里显示表、字段与分区/聚簇标记
+                  </p>
+                </div>
+              ) : schemaObj ? (
                 <div className="space-y-4 pb-10">
-                  {Object.entries(schemaObj).map(([tableName, tableInfo]: any) => (
+                  {Object.keys(schemaObj).length > 6 && (
+                    <input
+                      value={tableFilter}
+                      onChange={(e) => setTableFilter(e.target.value)}
+                      placeholder="筛选表名…"
+                      className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-gray-200 placeholder:text-gray-600 focus:outline-none focus:border-indigo-500/50"
+                    />
+                  )}
+                  {Object.entries(schemaObj)
+                    .filter(([t]) => !tableFilter || t.toLowerCase().includes(tableFilter.toLowerCase()))
+                    .map(([tableName, tableInfo]: any) => (
                     <div key={tableName} className="border border-white/10 rounded-xl bg-[#121212] overflow-hidden shadow-lg shadow-black/40 transition-all hover:border-indigo-500/30">
                       <div className="px-4 py-3 border-b border-white/5 flex items-center justify-between bg-gradient-to-r from-white/[0.02] to-transparent">
                         <span className="font-bold text-indigo-300 text-sm tracking-wide">{tableName}</span>
