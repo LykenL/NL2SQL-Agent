@@ -20,9 +20,18 @@ python scripts/refresh.py
 
 依次执行：`dagster asset materialize`（3 个摄取资产）→ `dbt build` → `dq_results` → `dq_gate`；任一步失败即非零退出。实测约 60 秒（摄取 27s / dbt 22s / DQ 11s）。
 
+## 分支
+
+| 分支 | 角色 |
+|---|---|
+| `v2-nextjs-fastapi` | **发布分支**：Render 服务、Vercel Production、定时刷新都跟它 |
+| `main` | 历史分支，冻结在转到 `v2-nextjs-fastapi` 之前的状态，不再更新 |
+
+每个提交流程：在 `v2-nextjs-fastapi` 上提交 → 自动 push → Vercel/Render 自动部署 → CI 跑测试。
+
 ## CI（GitHub Actions）
 
-`.github/workflows/data.yml`，push 到 `main` 或 `v2-nextjs-fastapi`、以及 PR 时触发。
+`.github/workflows/data.yml`，push 到 `v2-nextjs-fastapi`、以及 PR 时触发。
 
 | Job | 内容 | 依赖 secret |
 |---|---|---|

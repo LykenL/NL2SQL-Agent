@@ -2,7 +2,7 @@ name: data
 
 on:
   push:
-    branches: [main, v2-nextjs-fastapi]
+    branches: [v2-nextjs-fastapi]   # the release branch, and what Render/Vercel build
   pull_request:
   workflow_dispatch:
 
