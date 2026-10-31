@@ -1,0 +1,65 @@
+name: refresh
+
+# Daily warehouse refresh. This replaces a paid Render Cron Job: the pipeline runs
+# in Actions (free for public repos) using the same GCP_SA_JSON secret as CI.
+on:
+  schedule:
+    - cron: "0 6 * * *"   # 06:00 UTC daily
+  workflow_dispatch:
+
+concurrency:
+  group: refresh
+  cancel-in-progress: false
+
+env:
+  BQ_PROJECT: woven-surface-511317-g0
+  BQ_PREFIX: data_copilot_dev      # the online service reads dev_gold, so refresh must write here
+  BQ_SOURCE_PREFIX: data_copilot_dev
+  DAGSTER_HOME: /tmp/dagster_home
+  GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-sa.json
+
+jobs:
+  refresh:
+    name: ingest → dbt → dq
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install -q --upgrade pip
+          pip install -q -r backend-requirements.txt -r pipelines-requirements.txt
+
+      - name: Write service-account key
+        env:
+          GCP_SA_JSON: ${{ secrets.GCP_SA_JSON }}
+        run: |
+          if [ -z "$GCP_SA_JSON" ]; then echo "GCP_SA_JSON is not set"; exit 1; fi
+          printf '%s' "$GCP_SA_JSON" > "$GOOGLE_APPLICATION_CREDENTIALS"
+          chmod 600 "$GOOGLE_APPLICATION_CREDENTIALS"
+
+      - name: Refresh
+        run: python scripts/refresh.py
+
+      - name: Verify freshness
+        run: |
+          python - <<'PY'
+          import os
+          from google.cloud import bigquery
+          p = os.environ["BQ_PROJECT"]
+          rows = list(bigquery.Client(project=p).query(
+              f"select table_name, last_loaded, row_count from `{p}.data_copilot_dev_meta.mart_freshness` order by 1"))
+          for r in rows:
+              print(f"{r.table_name:32} {r.last_loaded}  rows={r.row_count}")
+              assert r.row_count > 0, f"{r.table_name} is empty"
+          print("freshness ok")
+          PY
+
+      - name: Post summary
+        if: always()
+        run: echo "### refresh $( [ ${{ job.status }} = success ] && echo OK || echo FAILED )" >> "$GITHUB_STEP_SUMMARY"

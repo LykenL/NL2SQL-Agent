@@ -46,7 +46,18 @@ python scripts/refresh.py
 - 密钥只存在于 GitHub Secrets，不在任何人的机器上；
 - 如果这条风险不可接受，正解是给 CI 单独一个 GCP 项目（数据从 dev 只读复制过去），成本是维护两套项目。
 
-## Render Cron Job（每天刷新）
+## 定时刷新（GitHub Actions，每天 06:00 UTC）
+
+`.github/workflows/refresh.yml`，`schedule: 0 6 * * *`，也可手动 `workflow_dispatch`。
+
+选择它而不是 Render Cron Job 的原因：Render 的 Free 实例类型**不支持** Cron Job，最低要付费档（约 $7/月级，虽按秒计费但需绑卡）；Actions 对 public 仓库免费，且 `GCP_SA_JSON` 已经配好。
+
+流程：写 key → `python scripts/refresh.py` → 断言 `mart_freshness` 行数非零。
+workspace 的 `BQ_PREFIX` 必须是 `data_copilot_dev`，否则 `/health` 会一直显示旧数据。
+
+已知限制：GitHub 的 schedule 在高峰期可能延迟几分钟到十几分钟（日更无影响）；仓库连续 60 天没有提交时定时任务会被自动停用，有一次提交即可恢复。
+
+## 备选：Render Cron Job（需付费）
 
 | 字段 | 值 |
 |---|---|
