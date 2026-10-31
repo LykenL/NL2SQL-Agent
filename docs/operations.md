@@ -84,6 +84,27 @@ Cron 使用**只读**的 `copilot-reader` 是不行的——它需要写 bronze/
 
 > 注意：目前线上服务读的是 `data_copilot_dev_gold`，所以定时刷新必须写 **dev** 前缀，否则 `/health` 永远显示旧数据。
 
+## DQ 失败诊断（triage）
+
+`dq_gate` 阻断发布，`DQTriager`（`src/core/dq_triage.py`）解释"为什么断了"。
+
+```bash
+curl -s https://nl2sql-agent-0hwl.onrender.com/api/dq/triage | python3 -m json.tool
+```
+
+输出结构：`status`（healthy / failing / unknown）、`failing` 数量，以及每条失败的
+`test_type`、`column`、`evidence`（真实行数与坏行数、占比、可复现的 SQL）、`likely_cause`、
+`suggested_fix`。
+
+三种入口共用同一份逻辑：agent 工具 `diagnose_data_quality`、`GET /api/dq/triage`、脚本内直接
+`DQTriage(...).report()`。
+
+**只读边界**：只跑 `SELECT` / `WITH`（非查询语句直接抛 `PermissionError`），只读 `*_meta` 与
+`*_gold`，单次 `maximum_bytes_billed` 2 GB。
+
+**注意**：`likely_cause` 是启发式判断，`evidence` 里的数字才是事实。如果两者冲突（台账说 900
+条失败、证据查询说 101 条为空），以证据为准并检查测试本身。
+
 ## 验证清单
 
 ```bash

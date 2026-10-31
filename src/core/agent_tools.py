@@ -160,6 +160,49 @@ def create_agent_tools(db_uri: str = None, source: DataSource = None) -> tuple:
         "execute_python_code": execute_python_code,
     }
 
+    # Marts sessions only: read the DQ ledger and explain what broke.
+    if getattr(ds, "meta_dataset", None) and getattr(ds, "allowed", None) is not None:
+        def diagnose_data_quality() -> str:
+            """Read the latest dbt run from the DQ ledger and grade every failure."""
+            import json as _json
+            from typing import Any
+
+            from google.cloud import bigquery
+
+            from src.core.dq_triage import DQTriage
+
+            mart: Any = ds  # only MartSource reaches this branch (guarded above)
+            try:
+                triage = DQTriage(
+                    client=bigquery.Client(project=mart.project),
+                    project=mart.project,
+                    meta_dataset=mart.meta_dataset,
+                    gold_dataset=mart.dataset,
+                )
+                report = triage.report()
+            except Exception as exc:
+                return f"❌ Triage failed: {type(exc).__name__}: {exc}"
+            text = _json.dumps(report, ensure_ascii=False, indent=1, default=str)
+            if len(text) > 7000:
+                text = text[:7000] + "\n... (truncated)"
+            return text
+
+        tools_schema.append({
+            "type": "function",
+            "function": {
+                "name": "diagnose_data_quality",
+                "description": (
+                    "Reads the latest dbt run from meta.dq_results and, for each failing test, "
+                    "runs one cheap evidence query on the guarded gold table (null count, "
+                    "duplicate keys, orphan keys, out-of-range values) and returns a heuristic "
+                    "cause plus a suggested fix. Read-only; use it whenever the user asks "
+                    "'did the data fail', 'which test broke', or before trusting a mart."
+                ),
+                "parameters": {"type": "object", "properties": {}, "required": []},
+            },
+        })
+        tool_map["diagnose_data_quality"] = diagnose_data_quality
+
     # BigQuery only: a free dry-run before spending money.
     if ds.supports_estimates:
         def estimate_query(sql: str) -> str:

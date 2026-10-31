@@ -96,7 +96,7 @@ async def health_check():
         "status": "ok",
         "message": "FastAPI is running",
         "version": _build_sha(),
-        "capabilities": ["chat", "execute", "upload", "schema", "metrics"],
+        "capabilities": ["chat", "execute", "upload", "schema", "metrics", "dq-triage"],
     }
 
 
@@ -149,6 +149,22 @@ def list_marts(project: str | None = None):
         "dq": dq,
         "allowed": sorted(src.allowed),
     }
+
+
+@app.get("/api/dq/triage")
+def dq_triage(project: str | None = None):
+    """
+    Read-only DQ triage: which tests failed in the latest run, the numbers behind
+    each failure, and a suggested next step.
+
+    Blocking (dq_gate) stops the pipeline; this explains what stopped it.
+    """
+    from src.core.dq_triage import triage_from_env
+
+    try:
+        return triage_from_env()
+    except Exception as exc:
+        return {"status": "error", "reason": f"{type(exc).__name__}: {exc}"[:300], "items": []}
 
 
 @app.get("/api/health/data")

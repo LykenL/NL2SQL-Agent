@@ -40,6 +40,7 @@ Kolada API ──Dagster──► bronze ──dbt staging──► silver ─�
 | **只读 gold 守卫** | `MartSource` 拦截任何触碰 `*_silver` / `*_bronze` 的查询并抛 `PermissionError`（6 条测试覆盖）。"模型不会乱查生产表"是代码路径，不是提示词承诺 |
 | **语义层（口径注册表）** | 口径存 `data/semantic/registry.db`，带 `draft / confirmed / stale` 状态机与确认留痕；代码在**执行前**校验是否使用了已确认口径的表达式（覆盖 `SUM(col)`、`df['col'].sum()`、`df.agg(...)` 等写法），词法检索匹配问题 |
 | **成本护栏** | BigQuery schema 走 metadata API（零字节扫描）；查询前 dry-run 估算字节与费用；强制外层 LIMIT 与 `maximum_bytes_billed` |
+| **DQ 失败诊断** | `dq_gate` 负责"拦住"，`DQTriager` 负责"解释"：读 `meta.dq_results` 里最新一轮的失败测试，对每一条跑**一条**证据查询（空值数、重复键、孤儿键、越界值），给出数字、启发式成因与下一步。agent 有对应工具 `diagnose_data_quality`，也有 `GET /api/dq/triage` |
 | 报错自愈 | 沙盒失败时回传"出错行 + 真实列名"，模型下一轮自行改正；栈帧只写日志，不甩给用户 |
 | 多数据源 | SQLite / PostgreSQL / MySQL / BigQuery / 已发布 marts，统一 `DataSource` 接口 |
 | 会话记忆 | 情节记忆（SQLite，逐轮）+ 语义记忆（ChromaDB + Ollama embedding），后台压缩 agent 提炼结论供跨会话召回 |
@@ -132,6 +133,7 @@ python scripts/refresh.py
 | GET | `/api/health` | 存活 + `version`（部署 commit）+ `capabilities` |
 | GET | `/api/health/data` | marts 行数、最新加载时间、DQ 计数、最旧新鲜度 |
 | GET | `/api/marts` | 已发布 marts 与允许表名 |
+| GET | `/api/dq/triage` | 最新一轮 DQ 失败诊断（只读，含证据查询） |
 | GET | `/api/datasources` | 可用数据源（BigQuery 是否已配置） |
 | GET | `/api/schema` | 指定数据源的表结构 |
 | POST | `/api/chat` | 自然语言提问 → 回复 + 可重跑脚本 |
