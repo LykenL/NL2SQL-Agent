@@ -72,7 +72,7 @@ def list_data_sources():
         "sources": bq,
         "bigquery_configured": bool(bq),
         "service_account": has_creds,
-        "note": (
+        "note": "" if bq else (
             "No BigQuery source available. Set BQ_PROJECT + BQ_PREFIX to expose the "
             "published marts, or BIGQUERY_DATASETS=project.dataset for a raw dataset; "
             "credentials come from GOOGLE_APPLICATION_CREDENTIALS."
