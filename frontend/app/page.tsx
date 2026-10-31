@@ -428,6 +428,10 @@ export default function Home() {
   const [activeCode, setActiveCode] = useState<string>("");
   const [renderHtml, setRenderHtml] = useState<string>("");
   const [renderError, setRenderError] = useState<string>("");
+  // A run that printed tables but drew nothing is "output", not a visualization.
+  const [hasChart, setHasChart] = useState<boolean>(false);
+  const [runStdout, setRunStdout] = useState<string>("");
+  const [canvasTab, setCanvasTab] = useState<string>("render");
   const [rendering, setRendering] = useState<boolean>(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -539,13 +543,21 @@ export default function Home() {
       const data = await res.json();
       if (data.error) {
         setRenderError(data.error);
+        setCanvasTab("render");
       } else {
         setRenderHtml(data.html);
+        setHasChart(!!data.has_chart);
+        setRunStdout(data.stdout || "");
+        // No figure → the data dump belongs on the script tab, not under a tab
+        // labelled "Live Visualization".
+        setCanvasTab(data.has_chart ? "render" : "code");
         // The canvas sits below a long answer; bring it into view so a finished
         // chart is never mistaken for "nothing happened".
-        setTimeout(() => {
-          document.getElementById("analytics-canvas")?.scrollIntoView({ behavior: "smooth", block: "start" });
-        }, 350);
+        if (data.has_chart) {
+          setTimeout(() => {
+            document.getElementById("analytics-canvas")?.scrollIntoView({ behavior: "smooth", block: "start" });
+          }, 350);
+        }
       }
     } catch (err: any) {
       setRenderError(err.message || "Execution failed");
@@ -932,7 +944,7 @@ export default function Home() {
 
               {/* Lower Section: Analytics Canvas & Script (Natural Flow on Same Scrollbar) */}
               <div id="analytics-canvas" className="flex flex-col bg-[#0a0a0a] min-h-[560px] scroll-mt-20">
-                <Tabs defaultValue="render" className="flex-1 flex flex-col">
+                <Tabs value={canvasTab} onValueChange={setCanvasTab} className="flex-1 flex flex-col">
                   <div className="px-6 py-3.5 border-b border-white/10 bg-[#0d0d12] flex items-center justify-between sticky top-0 z-20 shadow-md">
                     <div className="flex items-center gap-2.5">
                       <LayoutDashboard className="w-4 h-4 text-purple-400" />
@@ -947,7 +959,8 @@ export default function Home() {
                           value="render"
                           className="text-[12px] px-3.5 py-1 text-gray-400 hover:text-gray-200 data-[state=active]:bg-purple-600/20 data-[state=active]:text-purple-300 font-bold transition-all rounded-lg"
                         >
-                          <Play className="w-3 h-3 mr-1.5" /> Live Visualization
+                          <Play className="w-3 h-3 mr-1.5" />
+                          {renderHtml && !hasChart ? "Run Output" : "Live Visualization"}
                         </TabsTrigger>
                         <TabsTrigger
                           value="code"
@@ -979,7 +992,19 @@ export default function Home() {
                   </div>
 
                   <TabsContent value="render" className="flex-1 p-5 m-0 flex flex-col data-[state=active]:flex bg-[#050505]">
-                    {renderHtml ? (
+                    {renderHtml && !hasChart ? (
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2 text-[11px] text-gray-400">
+                          <span className="px-2 py-0.5 rounded-full bg-white/5 border border-white/10">
+                            本次运行没有画图
+                          </span>
+                          <span className="text-gray-600">这是脚本的原始输出；脚本本身见 Generated Script</span>
+                        </div>
+                        <pre className="max-h-[520px] overflow-auto rounded-2xl border border-white/10 bg-black/40 p-4 text-[12px] leading-relaxed text-gray-300 font-mono whitespace-pre-wrap">
+                          {runStdout || (renderHtml ? "（脚本没有产生文本输出）" : "")}
+                        </pre>
+                      </div>
+                    ) : renderHtml ? (
                       <div className="w-full min-h-[520px] bg-black/20 border border-white/5 overflow-hidden rounded-2xl shadow-inner">
                         <iframe srcDoc={renderHtml} className="w-full min-h-[520px] border-0 bg-transparent" sandbox="allow-scripts allow-popups" />
                       </div>

@@ -732,9 +732,12 @@ def execute_code(http_request: Request, request: ExecuteRequest):
     if output_html:
         output_html = output_html.replace("</body>", _CHART_WATCHDOG + "</body>")
 
+    has_chart = bool(output_html) and ("plotly-graph-div" in output_html or "vega-embed" in output_html)
+
     return {
         "html": output_html,
         "error": error_msg,
         "error_detail": error_detail,
         "stdout": stdout,
+        "has_chart": has_chart,
     }
