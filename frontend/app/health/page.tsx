@@ -136,7 +136,7 @@ export default function DataHealthPage() {
         {health?.status === "unconfigured" && (
           <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-4 text-xs text-amber-200 space-y-1.5">
             <div className="flex items-center gap-2 font-semibold">
-              <AlertTriangle className="w-4 h-4" /> 后端还没连上 BigQuery
+              <AlertTriangle className="w-4 h-4" /> Backend is not connected to BigQuery yet
             </div>
             <p className="text-amber-200/80">{health.message}</p>
             <p className="text-amber-200/60">{health.hint}</p>
@@ -146,10 +146,10 @@ export default function DataHealthPage() {
         {health?.status === "down" && (
           <div className="rounded-xl border border-rose-500/30 bg-rose-500/5 px-4 py-4 text-xs text-rose-200 space-y-1">
             <div className="flex items-center gap-2 font-semibold">
-              <XCircle className="w-4 h-4" /> {failing} 项数据质量检查未通过 —— gold 刷新已被阻断
+              <XCircle className="w-4 h-4" /> {failing} data-quality checks failed — gold refresh is blocked
             </div>
             <p className="text-rose-200/70">
-              下游的 copilot 不应被信任，直到测试恢复。
+              Downstream consumers must not be trusted until the tests recover.
             </p>
           </div>
         )}
@@ -171,7 +171,7 @@ export default function DataHealthPage() {
             <p className="text-2xl font-bold text-gray-100 mt-2">
               {health?.oldest_age_hours != null ? `${health.oldest_age_hours.toFixed(1)}h` : "—"}
             </p>
-            <p className="text-[11px] text-gray-600 mt-1">超过 26 小时标记为 stale</p>
+            <p className="text-[11px] text-gray-600 mt-1">Flagged stale after 26 hours</p>
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-[#101014] px-5 py-4">
@@ -184,7 +184,7 @@ export default function DataHealthPage() {
               <span className={failing ? "text-rose-300" : "text-gray-200"}>{totalChecks || "—"}</span>
             </p>
             <p className="text-[11px] text-gray-600 mt-1">
-              {health?.dq.last_run ? `最近一次运行 ${health.dq.last_run.slice(0, 19)}` : "尚无运行记录"}
+              {health?.dq.last_run ? `Last run ${health.dq.last_run.slice(0, 19)}` : "No runs recorded"}
             </p>
           </div>
         </div>
@@ -193,7 +193,7 @@ export default function DataHealthPage() {
         <div className="rounded-2xl border border-white/10 bg-[#101014] overflow-hidden">
           <div className="px-5 py-3.5 border-b border-white/10 flex items-center justify-between">
             <h2 className="text-xs font-semibold text-gray-300">Gold marts</h2>
-            <span className="text-[10px] text-gray-600">refresh 由管道写入 meta.mart_freshness</span>
+            <span className="text-[10px] text-gray-600">refresh times are written by the pipeline into meta.mart_freshness</span>
           </div>
           <table className="w-full text-xs">
             <thead className="text-[10px] uppercase tracking-wide text-gray-600">
@@ -216,8 +216,8 @@ export default function DataHealthPage() {
                 <tr>
                   <td colSpan={4} className="px-5 py-8 text-center text-gray-600">
                     {unconfigured
-                      ? "后端未连接 BigQuery：修好凭据后这里会显示每个 mart 的新鲜度"
-                      : "没有可显示的 mart（管道尚未运行）"}
+                      ? "Backend is not connected to BigQuery: fix the credentials to see per-mart freshness"
+                      : "No marts to show (the pipeline has not run yet)"}
                   </td>
                 </tr>
               )}
@@ -258,7 +258,7 @@ export default function DataHealthPage() {
           </div>
           {unconfigured ? (
             <p className="px-5 py-6 text-[11px] text-gray-600">
-              无法检查：后端未连接数据仓库。
+              Cannot check: the backend is not connected to the warehouse.
             </p>
           ) : health?.dq.failing.length ? (
             <ul className="divide-y divide-white/5">
@@ -272,13 +272,13 @@ export default function DataHealthPage() {
             </ul>
           ) : (
             <p className="px-5 py-6 text-[11px] text-gray-600">
-              最近一次运行没有失败项。
+              The latest run had no failures.
             </p>
           )}
         </div>
 
         <p className="text-[10px] text-gray-700">
-          source: {health?.project} · {health?.dataset} · 自动每 60s 刷新
+          source: {health?.project} · {health?.dataset} · auto-refreshes every 60s
         </p>
       </main>
     </div>

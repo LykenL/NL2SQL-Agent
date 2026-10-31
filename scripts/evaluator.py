@@ -6,11 +6,11 @@ from openai import OpenAI
 from dotenv import load_dotenv
 from src.core.agent_tools import create_agent_tools
 
-# 设定我们要测评的基准数据库
+# Baseline database for the benchmark
 DB_URI = "sqlite:///examples/databases/company.db"
 
-# 黄金数据集 (Golden Dataset)
-# 每个用例包含：提问 (question) 和 必须出现在回答中的预期关键词 (expected_keywords)
+# Golden dataset
+# Each case has a question and the keywords the answer must contain
 TEST_CASES = [
     # --- Level 1: Basic Aggregation ---
     {
@@ -64,7 +64,7 @@ def run_evaluation():
     print(f"📊 Loading test cases (Total {len(TEST_CASES)} questions)")
     print("-" * 50)
 
-    # 初始化大模型 (无记忆隔离模式，确保每次测验是完全公正的 Zero-shot)
+    # Fresh client per case: no memory isolation, so every run is a fair zero-shot
     client = OpenAI(
         api_key=os.getenv('OLLAMA_API_KEY', 'ollama'),
         base_url=os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434/v1'),
@@ -93,7 +93,7 @@ You have access to tools to fetch the database schema and execute Python code.
         print(f"\n▶️ Test Case {idx}: {question}")
         print("⏳ Agent is thinking and executing sandbox code...")
         
-        # 每次测试都新建一个干净的 chat session，防止之前的测试污染上下文
+        # A clean chat session per case so earlier cases cannot pollute the context
         messages = [
             {"role": "system", "content": system_instruction},
             {"role": "user", "content": question}
@@ -102,7 +102,7 @@ You have access to tools to fetch the database schema and execute Python code.
         start_time = time.time()
         
         try:
-            # 发送请请求
+            # Send the request
             response = client.chat.completions.create(
                 model="gemma4:31b-cloud",
                 messages=messages,
@@ -157,8 +157,8 @@ You have access to tools to fetch the database schema and execute Python code.
             
             answer_text = (msg.content or "").lower()
             
-            # 关键词精准命中法 (Keyword Match Eval)
-            # 只要预期关键词有【任意一个】命中，我们就认为大模型算对了
+            # Keyword-match evaluation
+            # Any one expected keyword is enough to count the answer as correct
             is_success = any(str(kw).lower() in answer_text for kw in expected)
             
             if is_success:
@@ -182,7 +182,7 @@ You have access to tools to fetch the database schema and execute Python code.
         except Exception as e:
             print(f"❌ Test crashed during execution: {e}")
 
-    # --- 输出最终评测报告 ---
+    # --- final report ---
     print("\n\n" + "="*50)
     print("📈 AGENT Comprehensive Performance Evaluation Report (Metrics Report)")
     print("="*50)
@@ -194,7 +194,7 @@ You have access to tools to fetch the database schema and execute Python code.
     avg_latency = total_latency / len(TEST_CASES)
     avg_tokens = total_tokens / len(TEST_CASES)
 
-    # 假设每百万 Token 价格为 0.15 美元 (Gemini Flash Lite 参考价)
+    # Assume $0.15 per million tokens (Gemini Flash Lite reference price)
     cost_per_million = 0.15
     total_cost_usd = (total_tokens / 1000000) * cost_per_million
 

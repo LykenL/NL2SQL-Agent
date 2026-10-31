@@ -69,12 +69,12 @@ class MartSource(BigQueryDataSource):
                 continue
             if not dataset.endswith("_gold"):
                 raise PermissionError(
-                    f"只能查询 gold 层，检测到 {project}.{dataset}.{table}。"
-                    f"可用表：{', '.join(sorted(self.allowed)) or '(manifest 未生成)'}"
+                    f"Only the gold layer is queryable; found {project}.{dataset}.{table}."
+                    f"Available tables: {', '.join(sorted(self.allowed)) or '(no manifest yet)'}"
                 )
             if self.allowed and table not in self.allowed:
                 raise PermissionError(
-                    f"{table} 不是已发布的 mart。可用表：{', '.join(sorted(self.allowed))}"
+                    f"{table} is not a published mart. Available tables: {', '.join(sorted(self.allowed))}"
                 )
 
     # -- execution ----------------------------------------------------------
@@ -110,7 +110,7 @@ class MartSource(BigQueryDataSource):
         try:
             rows = self.freshness()
         except Exception as exc:  # never block a chat on a metadata hiccup
-            return f"（新鲜度不可用：{type(exc).__name__}）"
+            return f"(freshness unavailable: {type(exc).__name__})"
         if not rows:
-            return "（无已发布的 mart）"
-        return "；".join(f"{r['table']}：{r['last_loaded']}（{r['row_count']} 行）" for r in rows)
+            return "(no published marts)"
+        return "; ".join(f"{r['table']}: {r['last_loaded']} ({r['row_count']} rows)" for r in rows)

@@ -308,7 +308,7 @@ def configured_bigquery_targets() -> list[dict]:
     if project and prefix:
         out.append({
             "id": f"marts:{project}.{prefix}_gold",
-            "label": f"{prefix}_gold（已发布的 marts）",
+            "label": f"{prefix}_gold (published marts)",
             "dialect": "marts",
         })
 

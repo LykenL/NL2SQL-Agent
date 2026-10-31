@@ -4,10 +4,10 @@ Admin CLI for the semantic metric registry.
 
     python scripts/semantic_admin.py seed-chinook
     python scripts/semantic_admin.py list [--status draft|confirmed|stale]
-    python scripts/semantic_admin.py resolve "今年的营收是多少"
+    python scripts/semantic_admin.py resolve "how much revenue this year"
     python scripts/semantic_admin.py confirm revenue --by lyken --evidence q_001
-    python scripts/semantic_admin.py add --id revenue --name 营收 --expr "SUM(Invoice.Total)" \
-        --alias 营收 --alias revenue --forbid UnitPrice
+    python scripts/semantic_admin.py add --id revenue --name revenue --expr "SUM(Invoice.Total)" \
+        --alias revenue --alias sales --forbid UnitPrice
     python scripts/semantic_admin.py stale revenue
     python scripts/semantic_admin.py delete revenue
     python scripts/semantic_admin.py check <script.py> --metric revenue

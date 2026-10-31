@@ -213,7 +213,7 @@ function DbConnectModal({
             Upload a file, paste a URI, or pick a configured BigQuery dataset.
           </p>
           <p className="text-[11px] text-gray-600 ml-11 mt-1">
-            当前：{currentLabel || "未连接"}
+            Current: {currentLabel || "Not connected"}
           </p>
         </div>
 
@@ -681,7 +681,7 @@ export default function Home() {
             }`} />
             <Database className="w-3.5 h-3.5" />
             <span className="max-w-[170px] truncate">
-              {dbConnected === "ok" ? dbLabel : "未连接 · 选择数据源"}
+              {dbConnected === "ok" ? dbLabel : "Not connected · choose a data source"}
             </span>
           </button>
 
@@ -718,7 +718,7 @@ export default function Home() {
               <div className="min-w-0">
                 <h2 className="text-sm font-bold text-gray-200 uppercase tracking-wider">Data Context</h2>
                 <p className="text-[10px] text-gray-500 truncate">
-                  {dbConnected === "ok" ? dbLabel : "未连接"}
+                  {dbConnected === "ok" ? dbLabel : "Not connected"}
                 </p>
               </div>
             </div>
@@ -736,15 +736,15 @@ export default function Home() {
               {!schemaObj && !schemaText ? (
                 <div className="py-10 text-center space-y-3">
                   <Database className="w-7 h-7 text-gray-700 mx-auto" />
-                  <p className="text-xs text-gray-500">还没有连接数据源</p>
+                  <p className="text-xs text-gray-500">No data source connected yet</p>
                   <button
                     onClick={() => setShowDbModal(true)}
                     className="px-3 py-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/30 text-[11px] text-indigo-300 hover:bg-indigo-500/20"
                   >
-                    选择数据源
+                    Choose a data source
                   </button>
                   <p className="text-[10px] text-gray-600 leading-relaxed px-3">
-                    连接后会在这里显示表、字段与分区/聚簇标记
+                    Tables, columns and partition/cluster markers appear here after you connect
                   </p>
                 </div>
               ) : schemaObj ? (
@@ -753,7 +753,7 @@ export default function Home() {
                     <input
                       value={tableFilter}
                       onChange={(e) => setTableFilter(e.target.value)}
-                      placeholder="筛选表名…"
+                      placeholder="Filter tables…"
                       className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 text-[11px] text-gray-200 placeholder:text-gray-600 focus:outline-none focus:border-indigo-500/50"
                     />
                   )}
@@ -996,12 +996,12 @@ export default function Home() {
                       <div className="space-y-3">
                         <div className="flex items-center gap-2 text-[11px] text-gray-400">
                           <span className="px-2 py-0.5 rounded-full bg-white/5 border border-white/10">
-                            本次运行没有画图
+                            This run produced no chart
                           </span>
-                          <span className="text-gray-600">这是脚本的原始输出；脚本本身见 Generated Script</span>
+                          <span className="text-gray-600">Raw script output — the script itself is in Generated Script</span>
                         </div>
                         <pre className="max-h-[520px] overflow-auto rounded-2xl border border-white/10 bg-black/40 p-4 text-[12px] leading-relaxed text-gray-300 font-mono whitespace-pre-wrap">
-                          {runStdout || (renderHtml ? "（脚本没有产生文本输出）" : "")}
+                          {runStdout || (renderHtml ? "(the script produced no text output)" : "")}
                         </pre>
                       </div>
                     ) : renderHtml ? (

@@ -17,10 +17,10 @@ models:
       refresh: daily
       metrics:
         - id: total_population
-          label: 总人口
+          label: total population
           expr: SUM(population)
           grain: region_year
-          expr_note: "mart_municipality_population.population 为当年人口" 
+          expr_note: "mart_municipality_population.population is the population for that year" 
 
   - name: mart_personnel_cost
     description: "Personnel cost per capita joined to population, with an estimated total cost."
@@ -34,7 +34,7 @@ models:
     meta:
       metrics:
         - id: avg_cost_per_capita
-          label: 人均人事成本 (SEK)
+          label: personnel cost per capita (SEK)
           expr: AVG(cost_per_capita_sek)
           grain: region_year
 

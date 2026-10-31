@@ -451,7 +451,12 @@ class SemanticRegistry:
 
 
 def seed_chinook_demo(registry: SemanticRegistry) -> list[Metric]:
-    """Definitions for the bundled Chinook database, as drafts."""
+    """Definitions for the bundled Chinook database, as drafts.
+
+    Aliases are deliberately bilingual: the registry matches the vocabulary
+    business users actually type, so Chinese phrasings stay alongside English
+    ones. These are matching data, not UI copy.
+    """
     demo = [
         Metric(
             id="revenue",

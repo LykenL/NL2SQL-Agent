@@ -27,7 +27,7 @@ def compress_session_memory(session_id: str):
     sqlite_mem = SQLiteMemory()
     vector_mem = VectorMemory()
     
-    # 捞出这一次聊天的所有废话和代码执行记录
+    # Pull every turn and code-execution record from this session
     raw_chat = sqlite_mem.get_all_context_for_compression(session_id)
     if not raw_chat.strip():
         print("[Compression Agent] No memory to compress for this session.")
@@ -36,11 +36,11 @@ def compress_session_memory(session_id: str):
     print("\n" + "="*50)
     print("🧠 [Compression Agent] Waking up to process episodic memory...")
     
-    # 【核心防御】：强制休眠 15 秒，绝对避免主 Agent 刚说完话就触发 5 RPM 红线！
+    # Hard sleep before calling: the main agent may have just used the rate limit
     print("⏳ [Compression Agent] Throttling for 15 seconds to respect rate limits...")
     time.sleep(15)
     
-    # 【定制 Prompt】：强制提取你要求的 Entity, Action, Result
+    # Custom prompt: extract Entity / Action / Result
     prompt = f"""You are an elite Memory Compression Agent.
 Analyze the following raw chat log between a User and a Data Analyst Agent.
 Your task is to extract the core insights so they can be saved to a long-term Vector Database.
@@ -67,15 +67,15 @@ Raw Chat Log:
         print(compressed_memory)
         print("\n")
         
-        # 将提炼出的高级逻辑注入 ChromaDB，自动转换为 Embedding 向量
+        # Store the distilled logic in ChromaDB (embedded automatically)
         vector_mem.add_memory(
             logic_content=compressed_memory,
             metadata={"session_id": session_id}
         )
         print("📥 [Compression Agent] Successfully embedded into Vector Memory!")
         
-        # 注意：这里我们故意不删除 SQLite 的源数据，方便你后续对账和 Debug。
-        # 实际生产中可以执行 `sqlite_mem.clear_session(session_id)`
+        # The SQLite source rows are intentionally kept for auditing and debugging.
+        # In production you could call `sqlite_mem.clear_session(session_id)` here.
         
     except Exception as e:
         print(f"❌ [Compression Agent] Error during compression: {e}")

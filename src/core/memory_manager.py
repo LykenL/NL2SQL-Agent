@@ -7,8 +7,8 @@ from sqlalchemy.orm import sessionmaker
 
 class DatabaseMemory:
     """
-    Episodic Memory (短期/近距记忆)
-    支持 SQLite (本地) 和 PostgreSQL (云端)
+    Episodic memory (short-term)
+    SQLite (local) or PostgreSQL (hosted)
     """
     def __init__(self, db_url=None):
         if db_url is None:
@@ -123,8 +123,8 @@ class DatabaseMemory:
 
 class VectorMemory:
     """
-    Semantic Memory (长期/远距记忆)
-    支持 ChromaDB (本地) 和 Pinecone (云端)
+    Semantic memory (long-term)
+    ChromaDB (local) or Pinecone (hosted)
     """
     def __init__(self, persist_directory="data/chroma_db"):
         self.pinecone_key = os.getenv("PINECONE_API_KEY")

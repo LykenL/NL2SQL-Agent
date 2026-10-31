@@ -39,7 +39,7 @@ _CHART_WATCHDOG = """<script>
       clearInterval(timer);
       var d = document.createElement('div');
       d.style.cssText = 'padding:20px 24px;color:#fca5a5;font:13px/1.6 Inter,system-ui,sans-serif';
-      d.textContent = '图表没有渲染出来：绘图库没有加载成功（网络拦截或脚本报错）。点 Re-run 重试；反复失败请检查浏览器控制台。';
+      d.textContent = 'Chart did not render: the plotting library failed to load (blocked network or a script error). Click Re-run; if it keeps failing, check the browser console.';
       document.body.appendChild(d);
     }
   }, 500);
@@ -224,7 +224,7 @@ def data_health(project: str | None = None):
             "dq": {"counts": {}, "failing": [], "last_run": None},
             "oldest_age_hours": None,
             "message": f"{type(exc).__name__}: {str(exc)[:200]}",
-            "hint": "Render 需要 GOOGLE_APPLICATION_CREDENTIALS 指向 Secret File，并设置 BQ_PROJECT / BQ_PREFIX。",
+            "hint": "Render needs GOOGLE_APPLICATION_CREDENTIALS pointing at the Secret File, plus BQ_PROJECT / BQ_PREFIX.",
         }
 
 

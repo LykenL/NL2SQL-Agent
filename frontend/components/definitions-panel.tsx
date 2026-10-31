@@ -159,7 +159,7 @@ export function DefinitionsPanel({ apiBase, open, onClose, onChanged }: Props) {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && testQuestion()}
-                placeholder="今年的营收是多少…"
+                placeholder="How much revenue this year…"
                 className="w-full bg-black/40 border border-white/10 rounded-lg pl-8 pr-3 py-2 text-xs text-gray-200 placeholder:text-gray-600 focus:outline-none focus:border-indigo-500/50"
               />
             </div>

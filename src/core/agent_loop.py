@@ -87,7 +87,7 @@ You have access to tools to fetch the database schema and execute Python code.
 8. ZERO CODE IN YOUR REPLY — HARD RULE, NO EXCEPTIONS:
    - NEVER output a fenced code block of any language (```python, ```sql, ```json, or a bare ```). NEVER paste, quote or reprint the script you executed, not even partially, not even "for reference", not even when the user asks for the code.
    - The UI already captures every script you run and renders it in the "Generated Script" panel below the chat. Repeating it in chat is a formatting failure.
-   - Refer to the code only in words, e.g. "完整脚本见下方 Generated Script 面板". Prose, tables and KPI bullets only — no source code.
+   - Refer to the code only in words, e.g. "the full script is in the Generated Script panel below". Prose, tables and KPI bullets only — no source code.
 9. VITAL FOR VISUALIZATIONS — you must adhere to the MODERN FINTECH DARK DASHBOARD style:
 
    ZERO) WHEN A CHART IS MANDATORY (check this before writing any code):
@@ -199,7 +199,7 @@ You have access to tools to fetch the database schema and execute Python code.
             f"You are querying `{data_source.label}`. {data_source.dialect_notes()}\n"
         )
         if hasattr(data_source, "freshness_text"):
-            system_instruction += f"\n数据最后刷新：{data_source.freshness_text()}\n"
+            system_instruction += f"\nData last refreshed: {data_source.freshness_text()}\n"
         if getattr(data_source, "supports_estimates", False):
             system_instruction += (
                 "This source bills by bytes scanned. Call `estimate_query` before any query that "

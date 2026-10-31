@@ -24,10 +24,10 @@ loop_code = loop_code.replace(old_chat, new_chat)
 
 old_send = """            print("⏳ Agent is thinking and working (calling tools in background)...")
             
-            # 发送强化过的请求给大模型
+            # Send the hardened request to the model
             response = chat.send_message(enriched_input)
             
-            # 把原生的一问一答存入 SQLite 短期记忆
+            # Persist the raw turn into SQLite episodic memory
             sqlite_mem.add_message(session_id, "agent", response.text)
             
             print(f"\\n🤖 Agent: {response.text}\\n")"""
