@@ -112,6 +112,83 @@ def list_marts(project: str | None = None):
     }
 
 
+@app.get("/api/health/data")
+def data_health(project: str | None = None):
+    """
+    Data Health: freshness per mart + the latest DQ run.
+
+    Degrades explicitly: without BigQuery credentials it returns
+    status="unconfigured" plus what to set, so the UI can say "backend not
+    connected" instead of showing a stack trace.
+    """
+    proj = project or os.getenv("BQ_PROJECT", "woven-surface-511317-g0")
+    prefix = os.getenv("BQ_PREFIX", "data_copilot_dev")
+
+    try:
+        from google.cloud import bigquery as _bq
+
+        client = _bq.Client(project=proj)
+
+        freshness_sql = f"""
+        select table_name,
+               last_loaded,
+               row_count,
+               round(timestamp_diff(current_timestamp(), last_loaded, MINUTE) / 60.0, 2) as age_hours
+        from `{proj}.{prefix}_meta.mart_freshness`
+        order by table_name
+        """
+        marts = [dict(r) for r in client.query(freshness_sql)]
+
+        dq_sql = f"""
+        select status, count(*) as n
+        from `{proj}.{prefix}_meta.dq_results`
+        where run_at = (select max(run_at) from `{proj}.{prefix}_meta.dq_results`)
+        group by status
+        """
+        dq_counts = {r["status"]: r["n"] for r in client.query(dq_sql)}
+
+        failing_sql = f"""
+        select table_name, check_name, message
+        from `{proj}.{prefix}_meta.dq_results`
+        where status = 'fail'
+          and run_at = (select max(run_at) from `{proj}.{prefix}_meta.dq_results`)
+        limit 20
+        """
+        failing = [dict(r) for r in client.query(failing_sql)]
+
+        last_run = [dict(r) for r in client.query(
+            f"select max(run_at) as last_run from `{proj}.{prefix}_meta.dq_results`"
+        )]
+
+        oldest = max((m["age_hours"] or 0) for m in marts) if marts else 0
+        failing_n = dq_counts.get("fail", 0)
+        status = "down" if failing_n else ("stale" if oldest > 26 else "ok")
+
+        return {
+            "status": status,
+            "project": proj,
+            "dataset": f"{prefix}_gold",
+            "marts": marts,
+            "dq": {
+                "counts": dq_counts,
+                "failing": failing,
+                "last_run": str(last_run[0]["last_run"]) if last_run and last_run[0]["last_run"] else None,
+            },
+            "oldest_age_hours": oldest,
+        }
+    except Exception as exc:
+        return {
+            "status": "unconfigured",
+            "project": proj,
+            "dataset": f"{prefix}_gold",
+            "marts": [],
+            "dq": {"counts": {}, "failing": [], "last_run": None},
+            "oldest_age_hours": None,
+            "message": f"{type(exc).__name__}: {str(exc)[:200]}",
+            "hint": "Render 需要 GOOGLE_APPLICATION_CREDENTIALS 指向 Secret File，并设置 BQ_PROJECT / BQ_PREFIX。",
+        }
+
+
 @app.get("/api/schema")
 def get_schema(db_uri: str | None = None, data_source: str | None = None):
     try:

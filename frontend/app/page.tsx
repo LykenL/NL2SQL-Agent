@@ -30,6 +30,7 @@ import {
   GripVertical,
   BookOpen,
   ShieldAlert,
+  Activity,
 } from "lucide-react";
 import {
   Panel,
@@ -657,6 +658,15 @@ export default function Home() {
               {dbConnected === "ok" ? dbLabel : "Connect DB"}
             </span>
           </button>
+
+          <a
+            href="/health"
+            title="Data freshness and quality"
+            className="shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.03] border border-white/10 text-gray-400 hover:text-gray-200 hover:bg-white/[0.07] transition-all"
+          >
+            <Activity className="w-3.5 h-3.5 text-emerald-400/80" />
+            <span className="hidden sm:inline">Data Health</span>
+          </a>
 
           <button
             onClick={() => setShowDefs(true)}
