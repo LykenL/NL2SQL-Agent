@@ -94,6 +94,7 @@ export default function DataHealthPage() {
   }, [load]);
 
   const style = STATUS_STYLE[health?.status ?? "unconfigured"];
+  const unconfigured = health?.status === "unconfigured";
   const failing = health?.dq.failing.length ?? 0;
   const passed = health?.dq.counts.pass ?? 0;
   const totalChecks = passed + failing + (health?.dq.counts.warn ?? 0);
@@ -204,7 +205,7 @@ export default function DataHealthPage() {
               </tr>
             </thead>
             <tbody>
-              {loading && !health?.marts.length && (
+              {loading && !health?.marts.length && !unconfigured && (
                 <tr>
                   <td colSpan={4} className="px-5 py-8 text-center text-gray-500">
                     <Loader2 className="w-4 h-4 animate-spin inline mr-2" /> Loading…
@@ -214,7 +215,9 @@ export default function DataHealthPage() {
               {!loading && !health?.marts.length && (
                 <tr>
                   <td colSpan={4} className="px-5 py-8 text-center text-gray-600">
-                    没有可显示的 mart（管道尚未运行，或后端未连接）
+                    {unconfigured
+                      ? "后端未连接 BigQuery：修好凭据后这里会显示每个 mart 的新鲜度"
+                      : "没有可显示的 mart（管道尚未运行）"}
                   </td>
                 </tr>
               )}
@@ -239,7 +242,11 @@ export default function DataHealthPage() {
         <div className="rounded-2xl border border-white/10 bg-[#101014] overflow-hidden">
           <div className="px-5 py-3.5 border-b border-white/10 flex items-center gap-2">
             <h2 className="text-xs font-semibold text-gray-300">Failing checks</h2>
-            {failing > 0 ? (
+            {unconfigured ? (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-gray-400">
+                unknown
+              </span>
+            ) : failing > 0 ? (
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/10 border border-rose-500/30 text-rose-300">
                 {failing}
               </span>
@@ -249,7 +256,11 @@ export default function DataHealthPage() {
               </span>
             )}
           </div>
-          {health?.dq.failing.length ? (
+          {unconfigured ? (
+            <p className="px-5 py-6 text-[11px] text-gray-600">
+              无法检查：后端未连接数据仓库。
+            </p>
+          ) : health?.dq.failing.length ? (
             <ul className="divide-y divide-white/5">
               {health.dq.failing.map((f, i) => (
                 <li key={i} className="px-5 py-3 text-[11px]">
