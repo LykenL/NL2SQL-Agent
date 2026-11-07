@@ -53,9 +53,19 @@ def client() -> Optional[Any]:
     try:
         from langfuse import get_client
 
-        # Pin the server explicitly: the SDK prefers LANGFUSE_BASE_URL over
-        # LANGFUSE_HOST, and a stale one in .env would silently win.
-        return get_client(public_key=os.getenv("LANGFUSE_PUBLIC_KEY"))
+        # get_client() only returns a client that was already initialised (the
+        # SDK does that when traced code runs). A CLI script has no request that
+        # triggered it, so it is created here on first use and reused after.
+        try:
+            return get_client(public_key=os.getenv("LANGFUSE_PUBLIC_KEY"))
+        except Exception:
+            from langfuse import Langfuse
+
+            return Langfuse(
+                public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
+                secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
+                host=host(),
+            )
     except Exception as exc:  # pragma: no cover - only with a broken install
         print(f"[tracing] disabled: {type(exc).__name__}: {exc}")
         return None

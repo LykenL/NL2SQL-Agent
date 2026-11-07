@@ -292,8 +292,10 @@ def main() -> int:
         print("\ndry run — no model calls made")
         return 0
 
+    from src.core import tracing
     from src.core.agent_tools import create_agent_tools
 
+    tracing.client()  # initialise once, so the loop does not re-init per call
     tools_schema, tool_map = create_agent_tools(source=ds)
 
     # Tool usage is collected by wrapping the map, so the report can say which
@@ -326,6 +328,8 @@ def main() -> int:
         "results": [asdict(r) for r in results],
         "wall_seconds": round(time.time() - started, 1),
     }
+    tracing.flush()  # CLI process: ship queued observations before exit
+
     out = Path(args.out) if args.out else ROOT / "evals" / "results" / f"run_{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(record, indent=2, ensure_ascii=False))
