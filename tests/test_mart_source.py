@@ -58,5 +58,19 @@ def test_gold_reference_passes_the_guard(src):
     src._assert_gold_only("select * from `proj.dev_gold.mart_municipality_population`")
 
 
-def test_information_schema_is_allowed(src):
-    src._assert_gold_only("select * from `proj.INFORMATION_SCHEMA.TABLES`")
+@pytest.mark.parametrize(
+    "sql",
+    [
+        # The old blanket exemption. Observed in an evaluation run: the agent
+        # listed every schema, then read silver/bronze column lists.
+        "select * from `proj.INFORMATION_SCHEMA.SCHEMATA`",
+        "select * from `proj.dev_silver.INFORMATION_SCHEMA.COLUMNS`",
+        "select * from `proj.dev_bronze.INFORMATION_SCHEMA.TABLES`",
+        "select * from `proj.dev_gold.INFORMATION_SCHEMA.COLUMNS`",
+        "select * from region-US.INFORMATION_SCHEMA.COLUMNS",
+    ],
+)
+def test_information_schema_is_blocked(src, sql):
+    """Metadata would reveal silver/bronze structure without reading a row."""
+    with pytest.raises(PermissionError, match="INFORMATION_SCHEMA"):
+        src._assert_gold_only(sql)

@@ -75,8 +75,17 @@ class MartSource(BigQueryDataSource):
 
     def _assert_gold_only(self, sql: str) -> None:
         for project, dataset, table in self.table_refs(sql):
-            if dataset.upper() == "INFORMATION_SCHEMA":
-                continue
+            if "INFORMATION_SCHEMA" in (dataset.upper(), table.upper()):
+                # Metadata is refused outright. The old blanket exemption let the
+                # agent enumerate schemas and read silver/bronze column lists —
+                # a working bypass, observed in an evaluation run. The marts and
+                # their columns already arrive via get_database_schema, so the
+                # agent loses nothing it needs.
+                raise PermissionError(
+                    "INFORMATION_SCHEMA is not queryable. Read marts through "
+                    f"get_database_schema / describe_table. Available marts: "
+                    f"{', '.join(sorted(self.allowed)) or '(no manifest yet)'}"
+                )
             if not dataset.endswith("_gold"):
                 raise PermissionError(
                     f"Only the gold layer is queryable; found {project}.{dataset}.{table}."
