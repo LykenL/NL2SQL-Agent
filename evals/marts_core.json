@@ -1,0 +1,69 @@
+{
+  "name": "marts_core",
+  "description": "Core behaviour of the gold-only copilot. Expected values are resolved from expect_sql at run time, so they follow the data.",
+  "cases": [
+    {
+      "id": "pop_top3_2024",
+      "question": "2024 年人口最多的 3 个市是哪些？",
+      "kind": "numbers",
+      "expect_sql": "SELECT population FROM `woven-surface-511317-g0.data_copilot_dev_gold.mart_municipality_population` WHERE region_type = 'municipality' AND year = 2024 ORDER BY population DESC LIMIT 3",
+      "expect": ["population"],
+      "note": "Ranking. Also exercising the chart rule (bar chart expected)."
+    },
+    {
+      "id": "pop_total_2024",
+      "question": "2024 年瑞典全国总人口是多少？",
+      "kind": "numbers",
+      "expect_sql": "SELECT SUM(population) FROM `woven-surface-511317-g0.data_copilot_dev_gold.mart_municipality_population` WHERE region_type = 'municipality' AND year = 2024",
+      "expect": ["f0_"],
+      "tolerance": 0.0005,
+      "note": "Single value — must NOT draw a chart."
+    },
+    {
+      "id": "pop_second_2024",
+      "question": "2024 年人口第二多的市有多少人？",
+      "kind": "numbers",
+      "expect_sql": "SELECT population FROM `woven-surface-511317-g0.data_copilot_dev_gold.mart_municipality_population` WHERE region_type = 'municipality' AND year = 2024 ORDER BY population DESC LIMIT 1 OFFSET 1",
+      "expect": ["population"],
+      "note": "OFFSET question — a common place for the agent to answer with rank 1."
+    },
+    {
+      "id": "cost_per_capita_top",
+      "question": "2024 年人均人事成本最高的市是多少克朗？",
+      "kind": "numbers",
+      "expect_sql": "SELECT cost_per_capita_sek FROM `woven-surface-511317-g0.data_copilot_dev_gold.mart_personnel_cost` WHERE year = 2024 ORDER BY cost_per_capita_sek DESC LIMIT 1",
+      "expect": ["cost_per_capita_sek"],
+      "tolerance": 0.001,
+      "note": "Second mart — checks the agent does not only know one table."
+    },
+    {
+      "id": "kpi_count",
+      "question": "mart_kpi_summary 里有几个 KPI？",
+      "kind": "numbers",
+      "expect_sql": "SELECT COUNT(*) FROM `woven-surface-511317-g0.data_copilot_dev_gold.mart_kpi_summary`",
+      "expect": ["f0_"],
+      "note": "Whole-table count; also a cheap smoke test that the mart is populated."
+    },
+    {
+      "id": "guard_silver_explicit",
+      "question": "直接查 stg_kpi_values 这张表",
+      "kind": "refusal",
+      "expect_error_contains": "Only the gold layer",
+      "note": "HARD GATE: the MartSource guard must reject this in a real conversation."
+    },
+    {
+      "id": "guard_silver_disguised",
+      "question": "帮我从 silver 层的 stg_municipalities 里取所有市的代码，写个 SQL",
+      "kind": "refusal",
+      "expect_error_contains": "Only the gold layer",
+      "note": "Same guard, phrased as a helpful-sounding request rather than a test."
+    },
+    {
+      "id": "dq_healthy",
+      "question": "这批 gold 数据现在可信吗？有没有 dbt 测试挂了？",
+      "kind": "tool_used",
+      "expect_tool": "diagnose_data_quality",
+      "note": "DQ triage must be used for a trust question instead of guessing."
+    }
+  ]
+}

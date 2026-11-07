@@ -448,6 +448,9 @@ def _run_agent_turns(user_message, session_id, client, tools_schema, tool_map,
     sqlite_mem.add_message(session_id, "assistant", final_text)
     
     exec_time = time.time() - start_time
+    # Reported by scripts/evaluate_agent.py (and any caller measuring efficiency)
+    # without adding a field to the public return signature.
+    run_agent_loop.last_iterations = iteration
 
     if traced_turn is not None:
         traced_turn.update(
