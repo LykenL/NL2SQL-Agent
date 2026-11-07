@@ -28,6 +28,16 @@ from typing import Any, Iterator, Optional
 _TRUTHY = {"1", "true", "yes", "on"}
 
 
+def host() -> str:
+    """The Langfuse server URL.
+
+    Both names are accepted because projects created in the US region hand out
+    LANGFUSE_BASE_URL, and the SDK itself reads that name when it initialises.
+    """
+    return (os.getenv("LANGFUSE_HOST") or os.getenv("LANGFUSE_BASE_URL")
+            or "https://cloud.langfuse.com")
+
+
 def enabled() -> bool:
     """Tracing is on only when both keys are present."""
     if os.getenv("LANGFUSE_TRACING", "").lower() in {"0", "false", "off", "no"}:
@@ -43,7 +53,9 @@ def client() -> Optional[Any]:
     try:
         from langfuse import get_client
 
-        return get_client()
+        # Pin the server explicitly: the SDK prefers LANGFUSE_BASE_URL over
+        # LANGFUSE_HOST, and a stale one in .env would silently win.
+        return get_client(public_key=os.getenv("LANGFUSE_PUBLIC_KEY"))
     except Exception as exc:  # pragma: no cover - only with a broken install
         print(f"[tracing] disabled: {type(exc).__name__}: {exc}")
         return None
@@ -74,7 +86,58 @@ def openai_client() -> Any:
 
 
 @contextlib.contextmanager
-def span(name: str, as_type: str = "span", **kwargs: Any) -> Iterator[Any]:
+def current_context(observation: Any) -> Any:
+    """The OTel context an observation lives in, so children take the same trace.
+
+    Threadpool workers lose the ambient context (see the note in agent_loop);
+    passing an explicit TraceContext keeps root, generations and tools in one
+    trace regardless of which thread built them.
+    """
+    trace_id = getattr(observation, "trace_id", None)
+    otel_span = getattr(observation, "_otel_span", None)
+    span_ctx = otel_span.get_span_context() if otel_span is not None else None
+    if not trace_id or span_ctx is None:
+        return _NullContext()
+    return _Context(trace_id, format(span_ctx.span_id, "016x"))
+
+
+class _NullContext:
+    def to_trace_context(self) -> None:
+        return None
+
+
+class _Context:
+    def __init__(self, trace_id: str, parent_id: str) -> None:
+        self.trace_id = trace_id
+        self.parent_span_id = parent_id
+
+    def to_trace_context(self) -> Any:
+        from langfuse.types import TraceContext
+
+        return TraceContext(trace_id=self.trace_id, parent_span_id=self.parent_span_id)
+
+
+@contextlib.contextmanager
+def otel_context(observation: Any) -> Any:
+    """A TraceContext pinned to this observation, usable from any thread.
+
+    The langfuse SDK resolves the parent from the ambient OTel context. A sync
+    endpoint runs in a threadpool worker, and observations created on a later
+    task there resolve to no parent — Langfuse then opens a SECOND trace and the
+    turn is split in two (root alone, children in another trace). Passing an
+    explicit trace_context at creation time removes that dependence.
+    """
+    trace_id = getattr(observation, "trace_id", None)
+    otel_span = getattr(observation, "_otel_span", None)
+    if not trace_id or otel_span is None:
+        return _NullContext()
+    span_ctx = otel_span.get_span_context()
+    return _Context(trace_id, format(span_ctx.span_id, "016x"))
+
+
+@contextlib.contextmanager
+def span(name: str, as_type: str = "span", *, context: Any = None,
+         **kwargs: Any) -> Iterator[Any]:
     """A child observation, or a do-nothing placeholder when tracing is off.
 
     Any observation created inside the block nests under it automatically.
@@ -83,6 +146,8 @@ def span(name: str, as_type: str = "span", **kwargs: Any) -> Iterator[Any]:
     if lf is None:
         yield _NullSpan()
         return
+    if context is not None and not isinstance(context, _NullContext):
+        kwargs["trace_context"] = context.to_trace_context()
     with lf.start_as_current_observation(as_type=as_type, name=name, **kwargs) as obs:
         yield obs
 

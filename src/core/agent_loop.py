@@ -70,6 +70,11 @@ def _tool_output(res) -> dict:
     return {"output": text[:2000], "chars": len(text)}
 
 
+class _NullTraceCtx:
+    def to_trace_context(self):
+        return None
+
+
 def run_agent_loop(
     user_message: str,
     session_id: str,
@@ -263,15 +268,21 @@ You have access to tools to fetch the database schema and execute Python code.
     # Root span for the turn. The API passes its own so the request-level span
     # stays the parent; direct callers get one opened here.
     own_turn = None
+    traced_ctx = None
     if langfuse_turn is None:
         own_turn = tracing.turn(session_id=session_id)
-        langfuse_turn = own_turn.__enter__()
+        span_obj = own_turn.__enter__()
+        # Direct callers have no tracing root; _NullSpan has no OTel context.
+        langfuse_turn = span_obj if hasattr(span_obj, "trace_id") else None
+    # Pin the OTel context of the root observation. Sibling observations created
+    # later (on a different threadpool thread) would otherwise start a new trace.
+    traced_ctx = tracing.otel_context(langfuse_turn) if langfuse_turn is not None else None
 
     try:
         return _run_agent_turns(
             user_message, session_id, client, tools_schema, tool_map,
             sqlite_mem, vector_mem, registry, active_metrics, trace, langfuse_turn,
-            system_instruction, data_source,
+            system_instruction, data_source, traced_ctx,
         )
     finally:
         if own_turn is not None:
@@ -280,7 +291,16 @@ You have access to tools to fetch the database schema and execute Python code.
 
 def _run_agent_turns(user_message, session_id, client, tools_schema, tool_map,
                      sqlite_mem, vector_mem, registry, active_metrics, trace,
-                     traced_turn, system_instruction, data_source=None):
+                     traced_turn, system_instruction, data_source=None,
+                     traced_ctx=None):
+    # Every observation is created on the same OTel context explicitly.
+    #
+    # Why not rely on the ambient context: when /api/chat runs in a threadpool
+    # worker (an async endpoint whose handler is sync), the langfuse SDK exports
+    # the root span on one context and the siblings opened later end up in a
+    # SECOND trace. Verified against Langfuse cloud: one turn produced
+    # `chat-turn` alone in one trace and every tool/generation in another.
+    ctx = traced_ctx if hasattr(traced_ctx, "to_trace_context") else _NullTraceCtx()
     messages = [{"role": "system", "content": system_instruction}]
     history = sqlite_mem.get_recent_context(session_id, limit=10)
     for msg in history:
@@ -323,6 +343,9 @@ def _run_agent_turns(user_message, session_id, client, tools_schema, tool_map,
         # `name` is understood only by the Langfuse OpenAI wrapper; a plain client
         # rejects unknown kwargs, so it is passed only when tracing is active.
         _call_kwargs = {"name": "agent-step"} if tracing.enabled() else {}
+        _tc = ctx.to_trace_context()
+        if _tc is not None:
+            _call_kwargs["trace_context"] = _tc
         response = client.chat.completions.create(
             model=os.getenv("AGENT_MODEL", "nemotron-3-super:cloud"),
             messages=_mask_messages(messages),
@@ -371,7 +394,7 @@ def _run_agent_turns(user_message, session_id, client, tools_schema, tool_map,
                             res = format_violations(blocked)
                             with tracing.span("definition-block", as_type="span",
                                               input={"metrics": [m.id for m in active_metrics]},
-                                              metadata={"violations": len(blocked)}) as _blk:
+                                              context=ctx) as _blk:
                                 _blk.update(output=res[:800])
                             tool_results_history.append(res)
                             messages.append({"role": "tool", "tool_call_id": t.id,
@@ -379,7 +402,8 @@ def _run_agent_turns(user_message, session_id, client, tools_schema, tool_map,
                             continue
 
                 if fname in tool_map:
-                    with tracing.span(fname, as_type="tool", input=_tool_input(fname, fargs)) as _tool:
+                    with tracing.span(fname, as_type="tool", input=_tool_input(fname, fargs),
+                                      context=ctx) as _tool:
                         res = tool_map[fname](**fargs)
                         # update(output=...) would overwrite the metadata the span
                         # was created with, so iteration and the call id go into
