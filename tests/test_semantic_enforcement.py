@@ -84,7 +84,9 @@ def _run(monkeypatch, turns):
     client = _ScriptedClient(turns)
     monkeypatch.setattr(loop, "SQLiteMemory", _Mem)
     monkeypatch.setattr(loop, "VectorMemory", _Vec)
-    monkeypatch.setattr(loop, "OpenAI", lambda *a, **k: client)
+    # agent_loop builds its client through tracing.openai_client() so the
+    # model call can be a traced generation; stub it at the seam.
+    monkeypatch.setattr(loop.tracing, "openai_client", lambda *a, **k: client)
 
     executed = []
 

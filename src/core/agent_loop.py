@@ -4,7 +4,7 @@ import sys
 import json
 import uuid
 import time
-from openai import OpenAI
+from src.core import tracing
 from src.core.memory_manager import SQLiteMemory, VectorMemory
 from src.core.semantic_registry import SemanticRegistry, format_violations
 from src.agents.compression_agent import compress_session_memory
@@ -36,6 +36,40 @@ def strip_code_fences(text: str, hint: str = "") -> str:
     return cleaned
 
 
+# ── Trace payload shaping ─────────────────────────────────────────────────────
+# A trace is for debugging one question, not for archiving the system prompt or
+# a schema dump: the system message (and the tool schemas it references) is
+# large and identical on every turn, so it is replaced by a short stub. Tool
+# inputs/outputs are clipped for the same reason.
+_SYSTEM_STUB = "[system prompt omitted from trace — see the repo]"
+
+
+def _mask_messages(messages: list) -> list:
+    out = []
+    for m in messages:
+        if m.get("role") == "system":
+            out.append({"role": "system", "content": _SYSTEM_STUB})
+        else:
+            out.append(m)
+    return out
+
+
+def _tool_input(name: str, args: dict) -> dict:
+    if name == "execute_python_code":
+        return {"code": (args.get("code_string") or "")[:4000]}
+    if name in ("run_query", "estimate_query"):
+        return {"sql": (args.get("sql") or "")[:2000]}
+    if name == "describe_table":
+        return {"table": args.get("table")}
+    return {k: (str(v)[:200] if not isinstance(v, (int, float, bool)) else v)
+            for k, v in list(args.items())[:6]}
+
+
+def _tool_output(res) -> dict:
+    text = str(res)
+    return {"output": text[:2000], "chars": len(text)}
+
+
 def run_agent_loop(
     user_message: str,
     session_id: str,
@@ -44,9 +78,14 @@ def run_agent_loop(
     db_uri: str | None = None,
     trace: dict | None = None,
     data_source=None,
+    langfuse_turn=None,
 ):
     """trace (optional, mutated in place) reports what the semantic layer did:
-    {"metrics": [...], "blocked": n, "warned": n}."""
+    {"metrics": [...], "blocked": n, "warned": n}.
+
+    langfuse_turn is an existing root span (opened by the API for the whole
+    request). When omitted, one is opened here so direct callers are traced too.
+    """
     sqlite_mem = SQLiteMemory()
     vector_mem = VectorMemory()
 
@@ -58,17 +97,17 @@ def run_agent_loop(
     active_metrics: list = []
     if enforce:
         try:
-            registry = SemanticRegistry()
-            active_metrics = registry.resolve(user_message)
+            with tracing.span("semantic-resolve", input={"question": user_message}) as _sr:
+                registry = SemanticRegistry()
+                active_metrics = registry.resolve(user_message)
+                _sr.update(output={"matched": [m.id for m in active_metrics]})
         except Exception as exc:  # a broken registry must never block analysis
             print(f"[semantic] registry unavailable: {exc}", file=sys.stderr)
             registry, active_metrics = None, []
 
-    client = OpenAI(
-        api_key=os.getenv('OLLAMA_API_KEY', 'ollama'), 
-        base_url=os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434/v1'),
-        default_headers={"ngrok-skip-browser-warning": "true"}
-    )
+    # Traced client: each model call becomes a `generation` with tokens and cost.
+    # Falls back to a plain OpenAI client when Langfuse keys are absent.
+    client = tracing.openai_client()
     
     system_instruction = """You are a Multi-Agent Database Copilot and Data Scientist.
 You have access to tools to fetch the database schema and execute Python code.
@@ -205,6 +244,8 @@ You have access to tools to fetch the database schema and execute Python code.
         )
         if hasattr(data_source, "freshness_text"):
             system_instruction += f"\nData last refreshed: {data_source.freshness_text()}\n"
+        if hasattr(data_source, "qualified_table_hint"):
+            system_instruction += f"\n{data_source.qualified_table_hint()}\n"
         if getattr(data_source, "supports_estimates", False):
             system_instruction += (
                 "This source bills by bytes scanned. Call `estimate_query` before any query that "
@@ -219,6 +260,27 @@ You have access to tools to fetch the database schema and execute Python code.
             "definition is wrong, say so in your final answer — do not silently substitute your own."
         )
 
+    # Root span for the turn. The API passes its own so the request-level span
+    # stays the parent; direct callers get one opened here.
+    own_turn = None
+    if langfuse_turn is None:
+        own_turn = tracing.turn(session_id=session_id)
+        langfuse_turn = own_turn.__enter__()
+
+    try:
+        return _run_agent_turns(
+            user_message, session_id, client, tools_schema, tool_map,
+            sqlite_mem, vector_mem, registry, active_metrics, trace, langfuse_turn,
+            system_instruction, data_source,
+        )
+    finally:
+        if own_turn is not None:
+            own_turn.__exit__(None, None, None)
+
+
+def _run_agent_turns(user_message, session_id, client, tools_schema, tool_map,
+                     sqlite_mem, vector_mem, registry, active_metrics, trace,
+                     traced_turn, system_instruction, data_source=None):
     messages = [{"role": "system", "content": system_instruction}]
     history = sqlite_mem.get_recent_context(session_id, limit=10)
     for msg in history:
@@ -232,7 +294,10 @@ You have access to tools to fetch the database schema and execute Python code.
     recalled_memories = vector_mem.search_memory(user_message, n_results=1)
     
     sqlite_mem.add_message(session_id, "user", user_message)
-    
+
+    if traced_turn is not None:
+        traced_turn.update(input={"question": user_message})
+
     if recalled_memories:
         enriched_input = f"[Recalled Past Knowledge: {recalled_memories[0]}]\n\nCurrent Request: {user_message}"
     else:
@@ -255,11 +320,15 @@ You have access to tools to fetch the database schema and execute Python code.
                 "content": "CRITICAL: You have ONE turn left. Summarize your factual data findings and conclusion in clear Markdown tables and bullet points. Do NOT include any code, code fences or the script itself — the UI renders it in the Generated Script panel."
             })
             
+        # `name` is understood only by the Langfuse OpenAI wrapper; a plain client
+        # rejects unknown kwargs, so it is passed only when tracing is active.
+        _call_kwargs = {"name": "agent-step"} if tracing.enabled() else {}
         response = client.chat.completions.create(
             model=os.getenv("AGENT_MODEL", "nemotron-3-super:cloud"),
-            messages=messages,
+            messages=_mask_messages(messages),
             tools=tools_schema,
-            temperature=0.0
+            temperature=0.0,
+            **_call_kwargs,
         )
         msg = response.choices[0].message
         
@@ -300,13 +369,24 @@ You have access to tools to fetch the database schema and execute Python code.
                             if trace is not None:
                                 trace["blocked"] = trace.get("blocked", 0) + 1
                             res = format_violations(blocked)
+                            with tracing.span("definition-block", as_type="span",
+                                              input={"metrics": [m.id for m in active_metrics]},
+                                              metadata={"violations": len(blocked)}) as _blk:
+                                _blk.update(output=res[:800])
                             tool_results_history.append(res)
                             messages.append({"role": "tool", "tool_call_id": t.id,
                                              "name": fname, "content": res})
                             continue
 
                 if fname in tool_map:
-                    res = tool_map[fname](**fargs)
+                    with tracing.span(fname, as_type="tool", input=_tool_input(fname, fargs)) as _tool:
+                        res = tool_map[fname](**fargs)
+                        # update(output=...) would overwrite the metadata the span
+                        # was created with, so iteration and the call id go into
+                        # the output payload instead.
+                        _out = _tool_output(res)
+                        _out.update({"iteration": iteration, "tool_call_id": t.id})
+                        _tool.update(output=_out)
                     if fname == "execute_python_code" and active_metrics and registry is not None:
                         warns = [v for v in registry.validate(fargs.get("code_string", ""), active_metrics)
                                  if v["severity"] != "block"]
@@ -344,6 +424,20 @@ You have access to tools to fetch the database schema and execute Python code.
     sqlite_mem.add_message(session_id, "assistant", final_text)
     
     exec_time = time.time() - start_time
-    
+
+    if traced_turn is not None:
+        traced_turn.update(
+            output={
+                "answer": final_text[:2000],
+                "iterations": iteration,
+                "has_script": bool(last_executed_code),
+                "seconds": round(exec_time, 2),
+            },
+            metadata={
+                "data_source": getattr(data_source, "label", None),
+                "tool_calls": len(tool_results_history),
+            },
+        )
+
     return final_text, last_executed_code, None, exec_time
 

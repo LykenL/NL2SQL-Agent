@@ -41,6 +41,7 @@ Kolada API ──Dagster──► bronze ──dbt staging──► silver ─�
 | **语义层（口径注册表）** | 口径存 `data/semantic/registry.db`，带 `draft / confirmed / stale` 状态机与确认留痕；代码在**执行前**校验是否使用了已确认口径的表达式（覆盖 `SUM(col)`、`df['col'].sum()`、`df.agg(...)` 等写法），词法检索匹配问题 |
 | **成本护栏** | BigQuery schema 走 metadata API（零字节扫描）；查询前 dry-run 估算字节与费用；强制外层 LIMIT 与 `maximum_bytes_billed` |
 | **DQ 失败诊断** | `dq_gate` 负责"拦住"，`DQTriager` 负责"解释"：读 `meta.dq_results` 里最新一轮的失败测试，对每一条跑**一条**证据查询（空值数、重复键、孤儿键、越界值），给出数字、启发式成因与下一步。agent 有对应工具 `diagnose_data_quality`，也有 `GET /api/dq/triage` |
+| **可观测性（Langfuse）** | 一次提问 = 一条 trace：根 span `chat-turn`（输入只有问题本身）下挂 `semantic-resolve`、每次模型调用一条 `generation`（带 token/成本）、每个工具一条 `tool`、以及拦截事件 `definition-block`。`session_id` 让同一次对话的多轮归入 Sessions 视图。未配置 `LANGFUSE_*` 时整体是 no-op |
 | 报错自愈 | 沙盒失败时回传"出错行 + 真实列名"，模型下一轮自行改正；栈帧只写日志，不甩给用户 |
 | 多数据源 | SQLite / PostgreSQL / MySQL / BigQuery / 已发布 marts，统一 `DataSource` 接口 |
 | 会话记忆 | 情节记忆（SQLite，逐轮）+ 语义记忆（ChromaDB + Ollama embedding），后台压缩 agent 提炼结论供跨会话召回 |

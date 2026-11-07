@@ -105,6 +105,37 @@ curl -s https://nl2sql-agent-0hwl.onrender.com/api/dq/triage | python3 -m json.t
 **注意**：`likely_cause` 是启发式判断，`evidence` 里的数字才是事实。如果两者冲突（台账说 900
 条失败、证据查询说 101 条为空），以证据为准并检查测试本身。
 
+## 追踪（Langfuse，可选）
+
+`src/core/tracing.py` 是唯一 import `langfuse` 的地方。
+
+| 变量 | 作用 |
+|---|---|
+| `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` | 二者缺一即关闭追踪，全部 helper 退化为 no-op |
+| `LANGFUSE_HOST` | `https://cloud.langfuse.com`（EU）或 `https://us.cloud.langfuse.com` |
+| `LANGFUSE_TRACING=off` | 有 key 也强制关闭（CI、压测时用） |
+
+trace 结构（一次 `/api/chat` = 一条 trace）：
+
+```
+chat-turn                    span   input = 问题本身；output = 清洗后的回答
+├── semantic-resolve         span   命中的口径 id
+├── agent-step × N           generation   模型、token、成本
+├── execute_python_code      tool   脚本片段、stdout、iteration
+├── run_query / estimate_query / describe_table / diagnose_data_quality   tool
+└── definition-block         span   语义层拦截事件（被拦时代替工具执行）
+```
+
+实现要点：
+- 模型调用走 `langfuse.openai` 的 OpenAI 包装（drop-in），因此每次调用自动成为
+  `generation` 并带 token/成本；未启用时回落到原生客户端。
+- 系统提示词与工具 schema 在 trace 里被替换为占位符（约 3k token，每轮相同），
+  只保留问题与回答 —— trace 是拿来调试一次提问的，不是拿来归档提示词的。
+- `langfuse>=5`：SDK 默认过滤 HTTP/数据库 span，BigQuery 客户端内部 span 不会污染
+  trace 树（v3 需要手写 processor 过滤）。
+- 服务启动时 `load_dotenv()` 必须在任何 Langfuse import 之前。
+- `tracing.flush()` 挂在 FastAPI lifespan 的关闭阶段，避免批量上报丢最后一条。
+
 ## 验证清单
 
 ```bash

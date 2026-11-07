@@ -167,7 +167,7 @@ class BigQueryDataSource(DataSource):
 
     # -- schema -------------------------------------------------------------
     def schema_json(self) -> str:
-        """INFORMATION_SCHEMA scan: column types, descriptions, partition/cluster keys.
+        """Column types, descriptions, partition/cluster keys, qualified names.
 
         BigQuery has no foreign keys, so the schema carries what the agent needs
         instead: table descriptions, partitioning and clustering columns.
@@ -204,6 +204,10 @@ class BigQueryDataSource(DataSource):
                 if f.name in (getattr(table, "clustering_fields", None) or []):
                     col["clustering_position"] = list(table.clustering_fields).index(f.name) + 1
                 entry["columns"].append(col)
+            # BigQuery rejects an unqualified name in a FROM clause, and the
+            # agent copies table keys straight out of this schema, so the fully
+            # qualified name is shown alongside the short one.
+            entry["qualified_name"] = f"{self.project}.{self.dataset}.{table_ref.table_id}"
             schema[table_ref.table_id] = entry
 
         self._schema = json.dumps(schema, indent=2)

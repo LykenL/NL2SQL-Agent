@@ -2,6 +2,7 @@ import os
 import sys
 import uuid
 import shutil
+from contextlib import asynccontextmanager
 from typing import Any
 from fastapi import FastAPI, HTTPException, UploadFile, File, Request
 from fastapi.responses import FileResponse
@@ -12,6 +13,13 @@ from sse_starlette.sse import EventSourceResponse
 # Add project root to sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 
+from dotenv import load_dotenv
+
+# Required ordering: Langfuse reads its keys when imported, so the environment has
+# to be loaded first. tracing imports langfuse lazily, after this call.
+load_dotenv(os.path.join(os.path.dirname(__file__), "../../.env"))
+
+from src.core import tracing  # noqa: E402
 from src.core.memory_manager import SQLiteMemory, VectorMemory
 from src.core.db_reader import extract_db_schema
 from src.core.agent_loop import run_agent_loop
@@ -24,7 +32,15 @@ from src.core.datasource import (
     source_from_spec,
 )
 
-app = FastAPI(title="Data Copilot API (V2)")
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    yield
+    # The SDK batches observations in the background; flush on shutdown or the
+    # last turn of a short-lived process is lost.
+    tracing.flush()
+
+
+app = FastAPI(title="Data Copilot API (V2)", lifespan=_lifespan)
 
 # If a chart never paints, say so instead of leaving an empty dark box.
 _CHART_WATCHDOG = """<script>
@@ -336,18 +352,32 @@ def chat(request: ChatRequest):
     tools, tool_map = create_agent_tools(source=data_source)
 
     trace: dict = {}
-    try:
-        final_response, sql, df, exec_time = run_agent_loop(
-            request.message,
-            request.session_id,
-            tools,
-            tool_map,
-            db_uri=None if isinstance(data_source, BigQueryDataSource) else uri,
-            trace=trace,
-            data_source=data_source,
+    # One trace per chat turn. session_id groups turns into a conversation, and the
+    # trace input is the question only — never the schema or the system prompt.
+    with tracing.turn(
+        session_id=request.session_id,
+        tags=["chat", getattr(data_source, "dialect", "unknown")],
+    ) as turn:
+        turn.update(
+            input={"question": request.message},
+            metadata={"data_source": getattr(data_source, "label", None)},
         )
+        try:
+            final_response, sql, df, exec_time = run_agent_loop(
+                request.message,
+                request.session_id,
+                tools,
+                tool_map,
+                db_uri=None if isinstance(data_source, BigQueryDataSource) else uri,
+                trace=trace,
+                data_source=data_source,
+                langfuse_turn=turn,
+            )
+        except Exception as e:
+            turn.update(level="ERROR", status_message=str(e)[:300])
+            raise
 
-        return {
+        result = {
             "response": final_response,
             "sql_executed": sql,
             "execution_time_seconds": exec_time,
@@ -356,8 +386,8 @@ def chat(request: ChatRequest):
             "blocked": trace.get("blocked", 0),
             "warned": trace.get("warned", 0),
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        turn.update(output={"answer": final_response[:2000], "seconds": round(exec_time, 2)})
+        return result
 
 
 # ── Semantic metric registry ─────────────────────────────────────────────────

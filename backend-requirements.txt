@@ -16,3 +16,5 @@ requests          # imported lazily by memory_manager
 google-cloud-bigquery>=3.25  # BigQuery data source (metadata + dry-run + query)
 pinecone
 sse-starlette
+langfuse>=5,<6  # tracing; optional at runtime — no keys means a no-op. v5 filters
+                # HTTP/database spans by default, so BigQuery client spans stay out

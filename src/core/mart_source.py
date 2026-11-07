@@ -60,6 +60,16 @@ class MartSource(BigQueryDataSource):
             tables.add(node["name"])
         return tables
 
+    def qualified_table_hint(self) -> str:
+        """BigQuery rejects unqualified table names, so spell the full form out."""
+        names = sorted(self.allowed) or ["<table>"]
+        example = f"{self.project}.{self.dataset}.{names[0]}"
+        return (
+            f"Table names in the schema are short forms. Always write the fully qualified "
+            f"`project.dataset.table` in SQL, e.g. `{example}`. A bare table name fails "
+            f"with 'must be qualified with a dataset'."
+        )
+
     def table_refs(self, sql: str) -> list[tuple[str, str, str]]:
         return _TABLE_REF.findall(sql or "")
 
