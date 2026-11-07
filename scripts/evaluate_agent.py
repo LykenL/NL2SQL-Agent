@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import re
 import sys
@@ -70,6 +71,18 @@ class Case:
     note: str = ""
 
 
+# Why a case failed. "wrong" only tells you the answer differed; these tell you
+# which part of the system to look at.
+FAILURE_KINDS = (
+    "wrong_value",     # produced a number, but not the expected one
+    "wrong_aggregation",  # answered a different question (sum instead of nth row)
+    "no_answer",       # never produced a usable answer (iteration cap, empty reply)
+    "leak",            # refused-case only: restricted data reached the user
+    "tool_missing",    # did not call the tool the question required
+    "error",           # the agent loop raised
+)
+
+
 @dataclass
 class Result:
     case_id: str
@@ -82,6 +95,8 @@ class Result:
     blocked: int = 0
     expected: Any = None
     actual: Any = None
+    failure: Optional[str] = None   # one of FAILURE_KINDS when not passed
+    tool_names: Optional[list[str]] = None
 
 
 # ── expectation resolution ───────────────────────────────────────────────────
@@ -143,7 +158,7 @@ def extract_numbers(text: str) -> list[float]:
 
 
 # ── one case ─────────────────────────────────────────────────────────────────
-def run_case(case: Case, ds, tools_schema, tool_map, used_tools: list[str]) -> Result:
+def run_case(case: Case, ds, tools_schema, tool_map, used_tools: list[str]) -> Result:  # type: ignore[assignment]
     from src.core.agent_loop import run_agent_loop
 
     trace: dict = {}
@@ -165,6 +180,7 @@ def run_case(case: Case, ds, tools_schema, tool_map, used_tools: list[str]) -> R
             case_id=case.id, kind=case.kind, passed=False,
             detail=f"agent raised {type(exc).__name__}: {exc}"[:300],
             seconds=round(time.time() - started, 1),
+            failure="error", tool_names=list(used_tools),
         )
 
     # `trace` is the semantic-layer report; the loop's own counters come from
@@ -203,7 +219,9 @@ def run_case(case: Case, ds, tools_schema, tool_map, used_tools: list[str]) -> R
             ok = True
             detail = "no restricted table in reply"
         return Result(passed=ok, detail=detail, expected=None,
-                      actual=(reply or "")[:200], **base)
+                      actual=(reply or "")[:200],
+                      failure=None if ok else "leak",
+                      tool_names=list(used_tools), **base)
 
     if case.kind == "tool_used":
         seen = list(used_tools)
@@ -211,7 +229,8 @@ def run_case(case: Case, ds, tools_schema, tool_map, used_tools: list[str]) -> R
         return Result(
             passed=ok,
             detail=f"expected tool {case.expect_tool!r}; saw {seen}",
-            actual=seen, **base,
+            actual=seen, failure=None if ok else "tool_missing",
+            tool_names=seen, **base,
         )
 
     # numbers — containment, not equality: a good answer also mentions totals,
@@ -226,11 +245,37 @@ def run_case(case: Case, ds, tools_schema, tool_map, used_tools: list[str]) -> R
         )
     ]
     ok = not missing
+    failure = None if ok else classify_failure(
+        case, reply, expected, got, iterations, int(os.getenv("EVAL_MAX_ITERATIONS", "7"))
+    )
     return Result(
         passed=ok,
         detail=("all expected values present" if ok else f"missing {missing}"),
-        expected=expected, actual=got[:20], **base,
+        expected=expected, actual=got[:20], failure=failure, tool_names=list(used_tools), **base,
     )
+
+
+def classify_failure(case: Case, reply: str, expected: list, got: list,
+                     iterations: int, max_iterations: int) -> str:
+    """Name the failure, so a report says where to look, not just that it failed."""
+    text = (reply or "").strip()
+    if not text:
+        return "no_answer"
+    if iterations >= max_iterations:
+        return "no_answer"
+    if case.kind != "numbers":
+        return "wrong_value"
+    # A number is present but wrong. Distinguish "computed something else
+    # entirely" (a total where a single row was asked for) from a near miss.
+    if not got:
+        return "no_answer"
+    # "Computed the wrong thing" means the reply carries a *different* aggregate:
+    # a total where one row was asked for. A near miss (608,000 for 608,993) is
+    # just an arithmetic error, so only a value that equals the expected sum counts.
+    total = sum(_norm(e) for e in expected if isinstance(_norm(e), float))
+    if len(expected) > 1 and total and any(abs(a - total) <= abs(total) * 0.01 for a in got):
+        return "wrong_aggregation"
+    return "wrong_value"
 
 
 # ── report ───────────────────────────────────────────────────────────────────
@@ -245,11 +290,98 @@ def summarise(results: list[Result]) -> dict:
         "cases": len(results),
         "passed": sum(1 for r in results if r.passed),
         "accuracy": rate(numeric),
+        "accuracy_range": proportion_interval(sum(1 for r in numeric if r.passed), len(numeric)),
         "guard_rate": rate(refusal),
+        "guard_range": proportion_interval(sum(1 for r in refusal if r.passed), len(refusal)),
         "tool_choice": rate(tooling),
         "avg_iterations": round(sum(r.iterations for r in results) / len(results), 2) if results else 0,
         "avg_seconds": round(sum(r.seconds for r in results) / len(results), 1) if results else 0,
     }
+
+
+def per_case_stats(runs: list[list[Result]]) -> dict:
+    """Group repeated runs by case and report the spread, not a single snapshot.
+
+    One run says "this answer happened once". The number that matters for a demo
+    or a claim is whether it happens every time, so repeats are summarised with
+    pass counts and the standard deviation of iterations.
+    """
+    by_case: dict[str, list[Result]] = {}
+    for run in runs:
+        for r in run:
+            by_case.setdefault(r.case_id, []).append(r)
+
+    out = {}
+    for case_id, items in by_case.items():
+        iters = [r.iterations for r in items]
+        secs = [r.seconds for r in items]
+        passes = sum(1 for r in items if r.passed)
+        out[case_id] = {
+            "runs": len(items),
+            "passes": passes,
+            "pass_rate": round(passes / len(items), 3),
+            "iterations": iters,
+            "iterations_mean": round(sum(iters) / len(iters), 2),
+            "iterations_stdev": round(_stdev(iters), 2),
+            "seconds_mean": round(sum(secs) / len(secs), 1),
+            # A case that passes 2 of 3 times is not a 67% case, it is unstable.
+            "stable": passes == len(items) or passes == 0,
+            "failures": sorted({r.failure for r in items if not r.passed}),
+        }
+    return out
+
+
+def proportion_interval(passes: int, n: int, z: float = 1.96) -> tuple[float, float]:
+    """Wilson 95% interval for a pass rate.
+
+    A rate over a handful of cases carries a wide error bar, and reporting the
+    point estimate alone invites claims the sample cannot support. Wilson is used
+    rather than the normal approximation because it stays sane at 0% and 100%,
+    which is exactly where a small guard suite lands.
+    """
+    if n == 0:
+        return (0.0, 1.0)
+    p = passes / n
+    denom = 1 + z * z / n
+    centre = (p + z * z / (2 * n)) / denom
+    half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / denom
+    return (max(0.0, round(centre - half, 3)), min(1.0, round(centre + half, 3)))
+
+
+def cases_needed(p: float, half_width: float, z: float = 1.96) -> int:
+    """Cases required before a pass rate can be stated within +/- half_width."""
+    return math.ceil((z * z * p * (1 - p)) / (half_width * half_width))
+
+
+def _stdev(values: list[float]) -> float:
+    if len(values) < 2:
+        return 0.0
+    mean = sum(values) / len(values)
+    return (sum((v - mean) ** 2 for v in values) / (len(values) - 1)) ** 0.5
+
+
+def aggregate_runs(runs: list[list[Result]]) -> dict:
+    """Metrics over every repetition, so accuracy is a rate over samples."""
+    flat = [r for run in runs for r in run]
+    base = summarise(flat)
+    stats = per_case_stats(runs)
+    unstable = [cid for cid, s in stats.items() if not s["stable"]]
+    return {
+        **base,
+        "runs": len(runs),
+        "samples": len(flat),
+        "unstable_cases": unstable,
+        "failures_by_kind": _failure_counts(flat),
+        "per_case": stats,
+    }
+
+
+def _failure_counts(results: list[Result]) -> dict:
+    counts: dict[str, int] = {}
+    for r in results:
+        if not r.passed and r.failure:
+            counts[r.failure] = counts.get(r.failure, 0) + 1
+    return counts
 
 
 def print_report(summary: dict, results: list[Result]) -> None:
@@ -258,7 +390,14 @@ def print_report(summary: dict, results: list[Result]) -> None:
     print("=" * 68)
     for key in ("cases", "passed", "accuracy", "guard_rate", "tool_choice",
                 "avg_iterations", "avg_seconds"):
-        print(f"  {key:<16} {summary[key]}")
+        line = f"  {key:<16} {summary[key]}"
+        # The rate alone hides how little a 5-case sample can say; the 95%
+        # interval makes the uncertainty part of the printed result.
+        for rate_key, range_key in (("accuracy", "accuracy_range"), ("guard_rate", "guard_range")):
+            if key == rate_key and range_key in summary:
+                lo, hi = summary[range_key]
+                line += f"   (95% CI {lo:.2f}-{hi:.2f}, n={summary.get('cases', 0)})"
+        print(line)
 
     failures = [r for r in results if not r.passed]
     if failures:
@@ -271,6 +410,23 @@ def print_report(summary: dict, results: list[Result]) -> None:
         print("\nNo failures.")
 
 
+def print_stability(summary: dict) -> None:
+    """Repetition view: pass rate per case and whether it is stable."""
+    print("\n" + "=" * 68)
+    print(f"STABILITY OVER {summary.get('runs', 1)} RUNS")
+    print("=" * 68)
+    print(f"  {'case':<24}{'pass':>8}{'iters avg':>11}{'stdev':>8}  failures")
+    for cid, s in summary.get("per_case", {}).items():
+        flag = "" if s["stable"] else "  <-- UNSTABLE"
+        kinds = ",".join(s["failures"]) if s["failures"] else "-"
+        print(f"  {cid:<24}{s['passes']}/{s['runs']:>2}{s['iterations_mean']:>11}"
+              f"{s['iterations_stdev']:>8}  {kinds}{flag}")
+    if summary.get("unstable_cases"):
+        print(f"\n  unstable: {', '.join(summary['unstable_cases'])}")
+    else:
+        print("\n  every case is all-pass or all-fail — no flapping")
+
+
 # ── main ─────────────────────────────────────────────────────────────────────
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -280,6 +436,8 @@ def main() -> int:
     ap.add_argument("--only", nargs="*", help="run specific case ids")
     ap.add_argument("--max-cases", type=int, default=0, help="cap the number of cases (cost control)")
     ap.add_argument("--min-accuracy", type=float, default=0.8)
+    ap.add_argument("--repeat", type=int, default=1,
+                    help="run the whole set N times; >1 reports stability, not a snapshot")
     ap.add_argument("--out", default="", help="write results JSON here")
     args = ap.parse_args()
 
@@ -323,20 +481,25 @@ def main() -> int:
     for name, fn in list(tool_map.items()):
         tool_map[name] = _recorder(name, fn, used)
 
-    results: list[Result] = []
+    runs: list[list[Result]] = []
     started = time.time()
-    for i, case in enumerate(cases, 1):
-        used.clear()
-        print(f"[{i}/{len(cases)}] {case.id} — {case.question}")
-        r = run_case(case, ds, tools_schema, tool_map, used)
-        results.append(r)
-        # tool_used needs the list the wrapper collected.
-        if case.kind == "tool_used":
-            pass
-        print(f"    {'PASS' if r.passed else 'FAIL'}  {r.iterations} iters, {r.seconds}s  {r.detail}")
+    for r_i in range(max(1, args.repeat)):
+        if args.repeat > 1:
+            print(f"\n--- run {r_i + 1}/{args.repeat} ---")
+        results: list[Result] = []
+        for i, case in enumerate(cases, 1):
+            used.clear()
+            print(f"[{i}/{len(cases)}] {case.id} — {case.question}")
+            r = run_case(case, ds, tools_schema, tool_map, used)
+            results.append(r)
+            print(f"    {'PASS' if r.passed else 'FAIL'}  {r.iterations} iters, {r.seconds}s  {r.detail}")
+        runs.append(results)
 
-    summary = summarise(results)
-    print_report(summary, results)
+    flat = [r for run in runs for r in run]
+    summary = aggregate_runs(runs) if len(runs) > 1 else summarise(flat)
+    print_report(summary, flat)
+    if len(runs) > 1:
+        print_stability(summary)
 
     record = {
         "run_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -344,7 +507,9 @@ def main() -> int:
         "source": args.source,
         "commit": _git_sha(),
         "summary": summary,
-        "results": [asdict(r) for r in results],
+        "repeat": args.repeat,
+        "results": [asdict(r) for r in flat],
+        "runs": [[asdict(r) for r in run] for run in runs],
         "wall_seconds": round(time.time() - started, 1),
     }
     tracing.flush()  # CLI process: ship queued observations before exit
@@ -354,8 +519,21 @@ def main() -> int:
     out.write_text(json.dumps(record, indent=2, ensure_ascii=False))
     print(f"\nreport  {out}")
 
-    ok = summary["accuracy"] >= args.min_accuracy and summary["guard_rate"] == 1.0
-    return 0 if ok else 1
+    # A subset run must not fail on metrics it never exercised: `--only
+    # guard_*` has no numeric cases, so accuracy is 0.0 by absence, not by
+    # performance. Gate only the kinds present in this run.
+    kinds_run = {r.kind for r in flat}
+    problems = []
+    if "numbers" in kinds_run and summary["accuracy"] < args.min_accuracy:
+        problems.append(f"accuracy {summary['accuracy']} < {args.min_accuracy}")
+    if "refusal" in kinds_run and summary["guard_rate"] < 1.0:
+        problems.append(f"guard_rate {summary['guard_rate']} < 1.0")
+    if summary.get("unstable_cases"):
+        problems.append(f"unstable cases: {summary['unstable_cases']}")
+    if problems:
+        print("\nFAILED: " + "; ".join(problems))
+        return 1
+    return 0
 
 
 def _recorder(name: str, fn, sink: list[str]):
