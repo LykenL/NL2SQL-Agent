@@ -45,7 +45,7 @@ python scripts/refresh.py
 
 | 账号 | 用途 | 权限 |
 |---|---|---|
-| `copilot-reader` | Render 线上服务（只读） | 项目级 `bigquery.dataViewer` + `jobUser`，数据集 ACL 的 READER/WRITER 视需要 |
+| `copilot-reader` | Render 线上服务（只读） | 项目级 `bigquery.jobUser` **+ 数据集级 READER，仅 `data_copilot_dev_gold` / `_meta`**。刻意不给项目级 `dataViewer`：那是 agent 越权读 silver/bronze 的通道（见 README「评估结果」）。改权限后需等约 1 分钟生效，并用 `scripts/evaluate_agent.py --only guard_silver_explicit` 复验 |
 | `copilot-ci` | GitHub Actions | 项目级 `bigquery.jobUser` + `bigquery.dataEditor` |
 
 **已知取舍**：`dbt build` 启动时会执行 `CREATE SCHEMA IF NOT EXISTS`，该操作需要**项目级** `bigquery.datasets.create`，而数据集级 ACL 和 IAM 条件都不覆盖“创建尚不存在的资源”。因此 CI 账号拿到了项目级 `dataEditor`，理论上可以写生产数据集。
