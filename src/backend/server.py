@@ -113,6 +113,12 @@ async def health_check():
         "message": "FastAPI is running",
         "version": _build_sha(),
         "capabilities": ["chat", "execute", "upload", "schema", "metrics", "dq-triage"],
+        # Tracing is optional; this reports whether keys reached the process and
+        # which server they point at, without ever echoing a key.
+        "tracing": {
+            "enabled": tracing.enabled(),
+            "host": tracing.host() if tracing.enabled() else None,
+        },
     }
 
 
