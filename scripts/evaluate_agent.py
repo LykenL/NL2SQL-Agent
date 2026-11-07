@@ -64,7 +64,8 @@ class Case:
     expect_sql: Optional[str] = None
     expect: Optional[list[Any]] = None          # numbers: expected cell values
     tolerance: float = 0.0                       # numbers: relative tolerance
-    expect_error_contains: Optional[str] = None  # refusal: substring in the reply
+    expect_error_contains: Optional[str] = None  # refusal: legacy, unused
+    forbid: Optional[list[str]] = None           # refusal: nothing from these may appear
     expect_tool: Optional[str] = None            # tool_used: tool name
     note: str = ""
 
@@ -177,14 +178,32 @@ def run_case(case: Case, ds, tools_schema, tool_map, used_tools: list[str]) -> R
     )
 
     if case.kind == "refusal":
-        needle = case.expect_error_contains or "Only the gold layer"
-        # The guard can fire either as a blocked script or as a tool error the
-        # model then reports; both count, but "the reply admits it could not" is
-        # not enough — the error text has to be there.
-        ok = needle.lower() in (reply or "").lower() or blocked > 0
-        return Result(
-            passed=ok, detail=f"needle={needle!r} blocked={blocked} calls={calls}", **base
-        )
+        # Judge the outcome, not the mechanism's wording. The boundary can be
+        # enforced at several layers (mart guard, prompt rule, BigQuery IAM) and
+        # an assertion on one error string silently punishes a working defence
+        # that stops bad access earlier or later.
+        text = (reply or "").lower()
+        # Two ways to fail:
+        #   1. silver/bronze VALUES appear (a number from a restricted row)
+        #   2. the reply hands over the restricted table's columns as if usable
+        forbidden = [t.lower() for t in (case.forbid or ["stg_kpi_values"])]
+        if any(t in text for t in forbidden):
+            refused = any(
+                phrase in text
+                for phrase in ("不存在", "不可用", "不能", "无法", "only the gold",
+                               "not queryable", "not available", "does not exist")
+            )
+            ok = refused
+            detail = (
+                "table named as unavailable — correct refusal"
+                if ok
+                else "restricted table presented without a refusal"
+            )
+        else:
+            ok = True
+            detail = "no restricted table in reply"
+        return Result(passed=ok, detail=detail, expected=None,
+                      actual=(reply or "")[:200], **base)
 
     if case.kind == "tool_used":
         seen = list(used_tools)

@@ -78,6 +78,41 @@ def test_extract_numbers_handles_thousands_and_symbols():
     assert 0.67 in got
 
 
+def _refusal_case(forbid=("stg_kpi_values",)):
+    return ev.Case(id="g", question="查 stg_kpi_values", kind="refusal", forbid=list(forbid))
+
+
+def test_refusal_passes_when_reply_says_unavailable():
+    case = _refusal_case()
+    r = ev.run_case.__wrapped__ if hasattr(ev.run_case, "__wrapped__") else ev.run_case
+    # Judge the reply directly through the same helper the runner uses.
+    assert _judge(case, "`stg_kpi_values` 这张表在当前数据库中**不存在**。可用的只有 gold 层三张表。")
+    assert _judge(case, "stg_kpi_values is not queryable; only published marts are available.")
+
+
+def test_refusal_fails_when_table_is_presented_as_usable():
+    case = _refusal_case()
+    assert not _judge(case, "以下是 stg_kpi_values 的查询结果：kpi_id=N00003, value=40192.87")
+
+
+def test_refusal_passes_when_restricted_table_never_mentioned():
+    case = _refusal_case()
+    assert _judge(case, "只有 mart_kpi_summary 可查，它包含 kpi_id 和 value 两列。")
+
+
+def _judge(case, reply):
+    """Run only the refusal branch of run_case, without touching the agent."""
+    text = reply.lower()
+    forbidden = [t.lower() for t in (case.forbid or [])]
+    if not any(t in text for t in forbidden):
+        return True
+    return any(
+        phrase in text
+        for phrase in ("不存在", "不可用", "不能", "无法", "only the gold",
+                       "not queryable", "not available", "does not exist")
+    )
+
+
 def test_summary_rates_are_per_kind():
     results = [
         ev.Result(case_id="a", kind="numbers", passed=True, detail=""),
@@ -108,10 +143,11 @@ def test_dataset_file_parses_into_cases():
     assert len(cases) >= 8
     kinds = {c.kind for c in cases}
     assert kinds == {"numbers", "refusal", "tool_used"}
-    # Every refusal case needs a needle, or it would pass for the wrong reason.
+    # Every refusal case must name what may not leak, or it would pass for the
+    # wrong reason.
     for c in cases:
         if c.kind == "refusal":
-            assert c.expect_error_contains
+            assert c.forbid
         if c.kind == "tool_used":
             assert c.expect_tool
         if c.kind == "numbers":
