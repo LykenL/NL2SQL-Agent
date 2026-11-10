@@ -71,6 +71,30 @@ def client() -> Optional[Any]:
         return None
 
 
+# Where the chat model lives. DeepSeek is OpenAI-compatible, so the agent loop
+# needs no change beyond these two values. Both are overridable for a local
+# server (the base URL only has to speak the OpenAI chat-completions API).
+DEFAULT_BASE_URL = "https://api.deepseek.com/v1"
+DEFAULT_MODEL = "deepseek-chat"
+
+
+def llm_base_url() -> str:
+    return os.getenv("LLM_BASE_URL") or DEFAULT_BASE_URL
+
+
+def llm_api_key() -> str:
+    key = os.getenv("LLM_API_KEY") or os.getenv("DEEPSEEK_API_KEY")
+    if not key:
+        raise RuntimeError(
+            "No model API key. Set LLM_API_KEY (or DEEPSEEK_API_KEY) in .env."
+        )
+    return key
+
+
+def llm_model() -> str:
+    return os.getenv("AGENT_MODEL") or DEFAULT_MODEL
+
+
 def openai_client() -> Any:
     """An OpenAI-compatible client that reports to Langfuse as a generation.
 
@@ -78,11 +102,7 @@ def openai_client() -> Any:
     subclass of openai.OpenAI, so every caller that already treats the result as
     a plain client keeps working.
     """
-    kwargs = {
-        "api_key": os.getenv("OLLAMA_API_KEY", "ollama"),
-        "base_url": os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1"),
-        "default_headers": {"ngrok-skip-browser-warning": "true"},
-    }
+    kwargs = {"api_key": llm_api_key(), "base_url": llm_base_url()}
     if enabled():
         try:
             from langfuse.openai import OpenAI as TracedOpenAI

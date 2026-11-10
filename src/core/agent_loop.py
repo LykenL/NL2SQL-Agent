@@ -353,7 +353,7 @@ def _run_agent_turns(user_message, session_id, client, tools_schema, tool_map,
         if _tc is not None:
             _call_kwargs["trace_context"] = _tc
         response = client.chat.completions.create(
-            model=os.getenv("AGENT_MODEL", "nemotron-3-super:cloud"),
+            model=tracing.llm_model(),
             messages=_mask_messages(messages),
             tools=tools_schema,
             temperature=0.0,

@@ -45,7 +45,7 @@ Kolada API ──Dagster──► bronze ──dbt staging──► silver ─�
 | **Observability** | One trace per chat turn: a `chat-turn` root (input is the question only) with `semantic-resolve`, one `generation` per model call (tokens and cost), one `tool` per tool call, and `definition-block` when the semantic layer rejects code. `session_id` groups turns in the Sessions view. A no-op when `LANGFUSE_*` is unset. |
 | Error recovery | Sandbox failures return the failing line plus the real column names, so the model corrects itself on the next turn. Stack frames go to logs, never to the user. |
 | Multiple sources | SQLite / PostgreSQL / MySQL / BigQuery / published marts through one `DataSource` interface. |
-| Memory | Episodic (SQLite, per turn) plus semantic (ChromaDB with Ollama embeddings); a background compression agent distils conclusions for cross-session recall. |
+| Memory | Episodic (SQLite, per turn) plus semantic (ChromaDB with Ollama embeddings); a background compression agent distils conclusions for cross-session recall. The chat model is pluggable: any OpenAI-compatible endpoint via `LLM_BASE_URL` / `LLM_API_KEY`, DeepSeek by default. |
 
 ---
 
@@ -77,7 +77,7 @@ docs/                operations.md, bigquery_source.md, semantic_layer.md
 ```bash
 pip install -r backend-requirements.txt -r pipelines-requirements.txt
 
-cp configs/.env.example .env          # OLLAMA_BASE_URL / OLLAMA_API_KEY: any OpenAI-compatible endpoint
+cp configs/.env.example .env          # LLM_API_KEY for the chat model (default: DeepSeek)
 uvicorn src.backend.server:app --reload --port 8000
 
 cd frontend && npm install && npm run dev    # http://localhost:3000

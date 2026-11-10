@@ -18,11 +18,9 @@ def compress_session_memory(session_id: str):
         print("[Compression Agent] Warning: GEMINI_API_KEY not found.")
         return
         
-    client = OpenAI(
-        api_key=os.getenv('OLLAMA_API_KEY', 'ollama'), 
-        base_url=os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434/v1'),
-        default_headers={"ngrok-skip-browser-warning": "true"}
-    )
+    from src.core.tracing import openai_client
+
+    client = openai_client()
     
     sqlite_mem = SQLiteMemory()
     vector_mem = VectorMemory()

@@ -52,9 +52,34 @@ def test_null_span_is_usable(monkeypatch):
 def test_openai_client_falls_back_to_plain_sdk(monkeypatch):
     monkeypatch.delenv("LANGFUSE_PUBLIC_KEY", raising=False)
     monkeypatch.delenv("LANGFUSE_SECRET_KEY", raising=False)
-    monkeypatch.setenv("OLLAMA_BASE_URL", "http://localhost:1/v1")
+    monkeypatch.setenv("LLM_BASE_URL", "http://localhost:1/v1")
+    monkeypatch.setenv("LLM_API_KEY", "test-key")
     client = tracing.openai_client()
     assert type(client).__module__.startswith("openai")
+
+
+def test_client_requires_a_key(monkeypatch):
+    """A missing key must fail loudly at the first call, not midway through a run."""
+    for name in ("LLM_API_KEY", "DEEPSEEK_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
+    try:
+        tracing.openai_client()
+    except RuntimeError as exc:
+        assert "LLM_API_KEY" in str(exc)
+    else:  # pragma: no cover
+        raise AssertionError("expected RuntimeError without a key")
+
+
+def test_model_and_endpoint_defaults_are_deepseek(monkeypatch):
+    for name in ("AGENT_MODEL", "LLM_BASE_URL"):
+        monkeypatch.delenv(name, raising=False)
+    assert tracing.llm_model() == "deepseek-chat"
+    assert tracing.llm_base_url() == "https://api.deepseek.com/v1"
+
+
+def test_model_name_is_overridable(monkeypatch):
+    monkeypatch.setenv("AGENT_MODEL", "deepseek-reasoner")
+    assert tracing.llm_model() == "deepseek-reasoner"
 
 
 def test_system_prompt_is_replaced_in_traced_messages():

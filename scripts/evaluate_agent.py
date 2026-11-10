@@ -453,7 +453,9 @@ def main() -> int:
 
     ds = source_from_spec(args.source, None)
     print(f"source   {args.source}")
-    print(f"model    {os.getenv('AGENT_MODEL', 'nemotron-3-super:cloud')}")
+    from src.core.tracing import llm_model
+
+    print(f"model    {llm_model()}")
     print(f"cases    {len(cases)}")
 
     # Resolve expectations first: a broken case fails fast, before any spend.
@@ -503,7 +505,7 @@ def main() -> int:
 
     record = {
         "run_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "model": os.getenv("AGENT_MODEL", "nemotron-3-super:cloud"),
+        "model": llm_model(),
         "source": args.source,
         "commit": _git_sha(),
         "summary": summary,
