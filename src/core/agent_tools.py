@@ -1,3 +1,5 @@
+import os
+
 from src.core.datasource import DataSource, SqlDataSource
 from src.core.executor import safe_execute
 
@@ -232,5 +234,34 @@ def create_agent_tools(db_uri: str = None, source: DataSource = None) -> tuple:
             }
         })
         tool_map["estimate_query"] = estimate_query
+
+    # Benchmark mode only: a single, explicit submission is the answer. Runs are
+    # exploratory, so "the last query that executed" is often a sanity check; a
+    # dedicated tool makes the agent state its final query deliberately.
+    if os.getenv("AGENT_PROMPT", "").lower() == "bird":
+        def submit_query(sql: str) -> str:
+            """Record the final query. The harness executes exactly this one."""
+            setattr(ds, "submitted_sql", sql)
+            return ("submitted — this query is what will be scored. "
+                    "Do not run further queries unless this one failed.")
+
+        tools_schema.append({
+            "type": "function",
+            "function": {
+                "name": "submit_query",
+                "description": (
+                    "Submit the ONE final query that answers the question. Its result set is the "
+                    "answer, so it must return exactly the columns and rows the question asks for — "
+                    "no extra context columns, no extra rows. Call it once, when you are done."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {"sql": {"type": "string", "description": "The final SQL."}},
+                    "required": ["sql"],
+                },
+            },
+        })
+        tool_map["submit_query"] = submit_query
+
 
     return tools_schema, tool_map

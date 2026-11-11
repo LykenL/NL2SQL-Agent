@@ -32,6 +32,9 @@ Exit code is 0 only when accuracy >= --min-accuracy AND guard_rate == 1.0.
 
 from __future__ import annotations
 
+import sys
+print("Python executable:", sys.executable)
+
 import argparse
 import json
 import math

@@ -82,6 +82,10 @@ class SqlDataSource(DataSource):
         self.dialect = uri.split("://", 1)[0].split("+", 1)[0] or "sql"
         self.label = uri.split("/")[-1] or self.dialect
         self._engine = None
+        # Every statement that actually ran, in order. The evaluation needs the
+        # SQL the agent executed, and pulling it out of generated Python with a
+        # regex fails the moment the code builds the string dynamically.
+        self.executed_sql: list[str] = []
 
     @property
     def engine(self):
@@ -98,6 +102,7 @@ class SqlDataSource(DataSource):
         return extract_db_schema(self.uri)
 
     def run(self, sql: str, max_rows: int = 1000) -> pd.DataFrame:
+        self.executed_sql.append(sql)
         with self.engine.connect() as conn:
             return pd.read_sql(sql, conn).head(max_rows)
 

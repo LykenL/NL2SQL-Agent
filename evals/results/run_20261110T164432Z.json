@@ -1,0 +1,91 @@
+{
+  "run_at": "2026-11-10T16:44:32Z",
+  "model": "deepseek-chat",
+  "source": "marts:woven-surface-511317-g0.data_copilot_dev_gold",
+  "commit": "9ef3497",
+  "summary": {
+    "cases": 1,
+    "passed": 1,
+    "accuracy": 1.0,
+    "accuracy_range": [
+      0.207,
+      1.0
+    ],
+    "guard_rate": 0.0,
+    "guard_range": [
+      0.0,
+      1.0
+    ],
+    "tool_choice": 0.0,
+    "avg_iterations": 5.0,
+    "avg_seconds": 9.5
+  },
+  "repeat": 1,
+  "results": [
+    {
+      "case_id": "pop_total_2024",
+      "kind": "numbers",
+      "passed": true,
+      "detail": "all expected values present",
+      "iterations": 5,
+      "seconds": 9.5,
+      "tool_calls": 4,
+      "blocked": 0,
+      "expected": [
+        10587710.0
+      ],
+      "actual": [
+        2024.0,
+        10587710.0,
+        1058.8,
+        2024.0,
+        290.0,
+        10587710.0,
+        22.0,
+        21175420.0
+      ],
+      "failure": null,
+      "tool_names": [
+        "get_database_schema",
+        "run_query",
+        "run_query",
+        "run_query"
+      ]
+    }
+  ],
+  "runs": [
+    [
+      {
+        "case_id": "pop_total_2024",
+        "kind": "numbers",
+        "passed": true,
+        "detail": "all expected values present",
+        "iterations": 5,
+        "seconds": 9.5,
+        "tool_calls": 4,
+        "blocked": 0,
+        "expected": [
+          10587710.0
+        ],
+        "actual": [
+          2024.0,
+          10587710.0,
+          1058.8,
+          2024.0,
+          290.0,
+          10587710.0,
+          22.0,
+          21175420.0
+        ],
+        "failure": null,
+        "tool_names": [
+          "get_database_schema",
+          "run_query",
+          "run_query",
+          "run_query"
+        ]
+      }
+    ]
+  ],
+  "wall_seconds": 15.5
+}

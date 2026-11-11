@@ -1,0 +1,83 @@
+{
+  "run_at": "2026-11-10T16:55:38Z",
+  "benchmark": "BIRD Mini-Dev (sqlite split)",
+  "model": "deepseek-flash",
+  "thinking": false,
+  "limit": 3,
+  "workers": 1,
+  "commit": "9ef3497",
+  "ex": 0.0,
+  "samples": 3,
+  "per_db": {
+    "california_schools": {
+      "ok": 0,
+      "n": 3
+    }
+  },
+  "failures": {
+    "wrong_result": 3
+  },
+  "wall_seconds": 33.6,
+  "results": [
+    {
+      "id": 0,
+      "db": "california_schools",
+      "question": "Among schools with a school-level SAT excellence rate above 0.3, what is the highest ages-5-17 free-meal eligibility rate?",
+      "evidence": "SAT excellence rate is the share of test takers scoring at least 1500.",
+      "sql": "SELECT MAX(1.0 * f.`Free Meal Count (Ages 5-17)` / f.`Enrollment (Ages 5-17)`) FROM frpm AS f JOIN satscores AS s ON s.cds = f.CDSCode WHERE s.rtype = 'S' AND s.NumTstTakr > 0 AND f.`Enrollment (Ages 5-17)` > 0 AND 1.0 * s.NumGE1500 / s.NumTstTakr > 0.3",
+      "difficulty": "moderate",
+      "ok": false,
+      "failure": "wrong_result",
+      "gold_error": null,
+      "pred_error": null,
+      "gold_n": 1,
+      "pred_n": 1,
+      "iterations": 4,
+      "tool_calls": 3,
+      "seconds": 6.2,
+      "predicted_sql": "SELECT\n  COUNT(*) AS n_rows,\n  COUNT(DISTINCT f.CDSCode) AS n_schools\nFROM frpm f\nJOIN satscores s ON f.CDSCode = s.cds\nWHERE s.NumTstTakr > 0\n  AND CAST(s.NumGE1500 AS REAL) / s.NumTstTakr > 0.3",
+      "sql_count": 2,
+      "reply_chars": 954
+    },
+    {
+      "id": 1,
+      "db": "california_schools",
+      "question": "For locally funded schools whose K-12 minus ages-5-17 enrollment difference exceeds the average such difference among locally funded schools, list each school's directory-listed name and DOC type.",
+      "evidence": "",
+      "sql": "SELECT s.School, s.DOCTYPE FROM frpm AS f JOIN schools AS s ON f.CDSCode = s.CDSCode WHERE s.FundingType = 'Locally funded' AND (f.\"Enrollment (K-12)\" - f.\"Enrollment (Ages 5-17)\") > ( SELECT AVG(f2.\"Enrollment (K-12)\" - f2.\"Enrollment (Ages 5-17)\") FROM frpm AS f2 JOIN schools AS s2 ON f2.CDSCode = s2.CDSCode WHERE s2.FundingType = 'Locally funded' ) ORDER BY s.CDSCode",
+      "difficulty": "challenging",
+      "ok": false,
+      "failure": "wrong_result",
+      "gold_error": null,
+      "pred_error": null,
+      "gold_n": 57,
+      "pred_n": 7,
+      "iterations": 6,
+      "tool_calls": 6,
+      "seconds": 16.1,
+      "predicted_sql": "WITH lf AS (\n  SELECT s.\"School\" AS name, s.\"DOCType\" AS doctype,\n         f.\"Enrollment (K-12)\" - f.\"Enrollment (Ages 5-17)\" AS diff\n  FROM schools s\n  JOIN frpm f ON s.\"CDSCode\" = f.\"CDSCode\"\n  WHERE s.\"FundingType\" = 'Locally funded'\n    AND f.\"Enrollment (K-12)\" IS NOT NULL\n    AND f.\"Enrollment (Ages 5-17)\" IS NOT NULL\n)\nSELECT name, doctype, diff\nFROM lf\nWHERE diff > (SELECT AVG(diff) FROM lf)\nORDER BY diff DESC, name\nLIMIT 10 OFFSET 50",
+      "sql_count": 5,
+      "reply_chars": 4987
+    },
+    {
+      "id": 2,
+      "db": "california_schools",
+      "question": "For the five schools with ownership code 66 and the largest K-12 free-or-reduced-price meal counts, give each school's K-12 eligible meal rate rounded to six decimal places.",
+      "evidence": "",
+      "sql": "SELECT ROUND(1.0 * f.\"FRPM Count (K-12)\" / NULLIF(f.\"Enrollment (K-12)\", 0), 6) FROM frpm AS f JOIN schools AS s ON s.CDSCode = f.CDSCode WHERE s.SOC = '66' AND f.\"FRPM Count (K-12)\" IS NOT NULL AND f.\"Enrollment (K-12)\" > 0 ORDER BY f.\"FRPM Count (K-12)\" DESC, s.CDSCode LIMIT 5",
+      "difficulty": "moderate",
+      "ok": false,
+      "failure": "wrong_result",
+      "gold_error": null,
+      "pred_error": null,
+      "gold_n": 5,
+      "pred_n": 5,
+      "iterations": 5,
+      "tool_calls": 4,
+      "seconds": 7.8,
+      "predicted_sql": "SELECT s.School, s.District, s.County,\n       f.\"FRPM Count (K-12)\" AS frpm_k12,\n       f.\"Enrollment (K-12)\" AS enroll_k12,\n       ROUND(f.\"FRPM Count (K-12)\" / f.\"Enrollment (K-12)\", 6) AS eligible_meal_rate\nFROM schools s\nJOIN frpm f ON s.CDSCode = f.CDSCode\nWHERE s.SOC = '66'\nORDER BY f.\"FRPM Count (K-12)\" DESC\nLIMIT 5",
+      "sql_count": 3,
+      "reply_chars": 1247
+    }
+  ]
+}

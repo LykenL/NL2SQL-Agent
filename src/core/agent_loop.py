@@ -70,6 +70,39 @@ def _tool_output(res) -> dict:
     return {"output": text[:2000], "chars": len(text)}
 
 
+# Deliberately minimal. No presentation rules, no chart mandate: the score is
+# whether the executed query returns exactly the rows and columns asked for.
+BIRD_SYSTEM_INSTRUCTION = """You are a text-to-SQL expert working against a SQLite database.
+
+Workflow:
+1. If the schema was not given to you, call get_database_schema first. Never invent
+   table or column names — SQLite quoting is strict, and a wrong name fails the query.
+2. Write ONE query that answers the question exactly, and run it with run_query or
+   ds.run(sql). You may run exploratory queries, but the LAST query you run must be
+   the answer.
+3. SHAPE RULE - scored literally, and an extra column is a wrong answer:
+   - "how many / how much / what is the ratio / what is the highest" -> ONE row,
+     ONE column. `SELECT COUNT(*) FROM ...`, never `SELECT name, COUNT(*) ...`.
+   - "which / list / give the names" -> the rows themselves, and only the columns
+     named in the question.
+   - "the Nth ..." -> LIMIT 1 OFFSET N-1, with only the requested columns.
+   - Never append ids, names, districts, counties or context columns to make the
+     result more readable. Readability is not scored; exactness is.
+   Example - "how many schools are in Alameda County?":
+     WRONG: SELECT School, County FROM schools WHERE County = 'Alameda'
+     RIGHT: SELECT COUNT(*) FROM schools WHERE County = 'Alameda'
+4. Match aggregate grain: a question about a row, a named item or "the Nth" usually
+   wants one row; a question about "which/all/list" wants the rows themselves.
+5. Mind SQLite details: integer division truncates, so cast to REAL before dividing
+   (e.g. CAST(a AS REAL) / b). Filter out NULLs when they would distort an aggregate.
+6. Finish with submit_query(sql=...). That call is the answer: the harness executes
+   exactly that query and compares its result set. Run exploratory queries freely
+   first, but the submitted one must be final and correctly shaped.
+7. In your final reply, state the answer in one or two sentences. No charts, no
+   stylistic tables — the query result is the answer.
+"""
+
+
 class _NullTraceCtx:
     def to_trace_context(self):
         return None
@@ -113,8 +146,8 @@ def run_agent_loop(
     # Traced client: each model call becomes a `generation` with tokens and cost.
     # Falls back to a plain OpenAI client when Langfuse keys are absent.
     client = tracing.openai_client()
-    
-    system_instruction = """You are a Multi-Agent Database Copilot and Data Scientist.
+
+    _PRODUCT_SYSTEM_INSTRUCTION = """You are a Multi-Agent Database Copilot and Data Scientist.
 You have access to tools to fetch the database schema and execute Python code.
 1. ALWAYS use the `get_database_schema` tool first to understand the tables.
 2. Write Python code using pandas and SQLAlchemy to query the database.
@@ -243,6 +276,16 @@ You have access to tools to fetch the database schema and execute Python code.
 10. Explain the final result clearly to the user in their language.
 """
 
+    # Benchmark mode. The product prompt asks for a readable presentation of
+    # findings (entity tables, charts), which is the opposite of what an
+    # execution-accuracy benchmark scores: it wants the exact result set of one
+    # query. Mixing them produced 8% EX on BIRD, where the failures were mostly
+    # "listed the rows instead of counting them".
+    if os.getenv("AGENT_PROMPT", "").lower() == "bird":
+        system_instruction = BIRD_SYSTEM_INSTRUCTION
+    else:
+        system_instruction = _PRODUCT_SYSTEM_INSTRUCTION
+
     if trace is not None:
         trace["metrics"] = [m.to_dict() for m in active_metrics]
         trace["blocked"] = 0
@@ -331,13 +374,17 @@ def _run_agent_turns(user_message, session_id, client, tools_schema, tool_map,
         
     messages.append({"role": "user", "content": enriched_input})
     
-    max_iterations = 7
+    # BIRD's hard questions need several exploratory queries; the product flows
+    # converge in fewer. Configurable so a benchmark run does not silently hit a
+    # limit tuned for a different workload.
+    max_iterations = int(os.getenv("AGENT_MAX_ITERATIONS", "7"))
     iteration = 0
     start_time = time.time()
     
     last_executed_code = ""
     tool_results_history = []
     
+    submitted = False
     while iteration < max_iterations:
         iteration += 1
         if iteration == max_iterations - 1:
@@ -357,6 +404,9 @@ def _run_agent_turns(user_message, session_id, client, tools_schema, tool_map,
             messages=_mask_messages(messages),
             tools=tools_schema,
             temperature=0.0,
+            # DeepSeek ignores temperature while thinking; disabling thinking is
+            # what makes the deterministic setting actually apply.
+            extra_body=tracing.extra_body(),
             **_call_kwargs,
         )
         msg = response.choices[0].message
@@ -428,9 +478,16 @@ def _run_agent_turns(user_message, session_id, client, tools_schema, tool_map,
                     res = "Tool not found"
                 tool_results_history.append(str(res))
                 messages.append({"role": "tool", "tool_call_id": t.id, "name": fname, "content": str(res)})
+                if fname == "submit_query":
+                    # The submission is the answer; further exploration would only
+                    # add cost and could replace the scored query.
+                    submitted = True
+                    break
         else:
             break
-            
+        if submitted:
+            break
+
     raw_text = (msg.content or "")
     if iteration >= max_iterations:
         raw_text += "\n\n⚠️ **System Warning:** Hard execution limit reached."
@@ -454,9 +511,12 @@ def _run_agent_turns(user_message, session_id, client, tools_schema, tool_map,
     sqlite_mem.add_message(session_id, "assistant", final_text)
     
     exec_time = time.time() - start_time
-    # Reported by scripts/evaluate_agent.py (and any caller measuring efficiency)
-    # without adding a field to the public return signature.
+    # Reported to callers without widening the return signature. The dict wins
+    # over the function attribute: under a thread pool the attribute is shared,
+    # so concurrent runs overwrite each other's counts.
     run_agent_loop.last_iterations = iteration
+    if trace is not None:
+        trace["iterations"] = iteration
 
     if traced_turn is not None:
         traced_turn.update(

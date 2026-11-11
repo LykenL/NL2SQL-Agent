@@ -73,7 +73,7 @@ def test_client_requires_a_key(monkeypatch):
 def test_model_and_endpoint_defaults_are_deepseek(monkeypatch):
     for name in ("AGENT_MODEL", "LLM_BASE_URL"):
         monkeypatch.delenv(name, raising=False)
-    assert tracing.llm_model() == "deepseek-chat"
+    assert tracing.llm_model() == "deepseek-flash"
     assert tracing.llm_base_url() == "https://api.deepseek.com/v1"
 
 

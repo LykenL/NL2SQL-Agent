@@ -75,7 +75,10 @@ def client() -> Optional[Any]:
 # needs no change beyond these two values. Both are overridable for a local
 # server (the base URL only has to speak the OpenAI chat-completions API).
 DEFAULT_BASE_URL = "https://api.deepseek.com/v1"
-DEFAULT_MODEL = "deepseek-chat"
+# flash = the cheap tier. Thinking is ON by default on DeepSeek, and thinking
+# mode ignores temperature, so the agent loop passes thinking={"type":"disabled"}
+# unless the caller opts in.
+DEFAULT_MODEL = "deepseek-flash"
 
 
 def llm_base_url() -> str:
@@ -93,6 +96,21 @@ def llm_api_key() -> str:
 
 def llm_model() -> str:
     return os.getenv("AGENT_MODEL") or DEFAULT_MODEL
+
+
+def thinking_enabled() -> bool:
+    """Whether the model should emit a chain of thought.
+
+    Off by default: this agent's loop is tool-call driven, so visible reasoning
+    triples the output tokens for no accuracy gain. Set LLM_THINKING=on to test
+    the alternative.
+    """
+    return os.getenv("LLM_THINKING", "off").lower() in {"1", "on", "true", "yes"}
+
+
+def extra_body() -> dict:
+    """DeepSeek-only request fields that the OpenAI SDK passes through verbatim."""
+    return {"thinking": {"type": "enabled" if thinking_enabled() else "disabled"}}
 
 
 def openai_client() -> Any:
