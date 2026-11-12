@@ -396,6 +396,26 @@ def classify(gold_err, pred_err, pred_rows, gold_rows, script) -> str:
     return "wrong_result"
 
 
+def summarize_linking(results: list[dict]) -> dict:
+    """Summarise linker telemetry without assuming every agent run completed.
+
+    A provider/agent exception is still a scored result. Its diagnostic record
+    intentionally contains no schema-link fields, so report writing must never
+    turn that one failure into a lost, costly whole run.
+    """
+    n = len(results)
+    return {
+        "used": sum(1 for r in results if r.get("linked", False)),
+        "fell_back": sum(1 for r in results if r.get("link_fell_back", False)),
+        "average_full_schema_chars": round(
+            sum(r.get("full_schema_chars", 0) for r in results) / n, 1
+        ) if n else 0,
+        "average_narrowed_schema_chars": round(
+            sum(r.get("narrowed_schema_chars", 0) for r in results) / n, 1
+        ) if n else 0,
+    }
+
+
 # ── main ---------------------------------------------------------------------
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
@@ -526,12 +546,7 @@ def main() -> int:
         "per_db": {db: {"ok": sum(1 for r in items if r["ok"]), "n": len(items)}
                    for db, items in by_db.items()},
         "failures": fails,
-        "linking": {
-            "used": sum(1 for r in results if r["linked"]),
-            "fell_back": sum(1 for r in results if r["link_fell_back"]),
-            "average_full_schema_chars": round(sum(r.get("full_schema_chars", 0) for r in results) / len(results), 1) if results else 0,
-            "average_narrowed_schema_chars": round(sum(r.get("narrowed_schema_chars", 0) for r in results) / len(results), 1) if results else 0,
-        },
+        "linking": summarize_linking(results),
         "wall_seconds": round(time.time() - started, 1),
         "results": results,
     }

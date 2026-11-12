@@ -104,3 +104,16 @@ def test_classify_wrong_result():
 
 def test_classify_gold_broken():
     assert bird.classify("no such table", None, [], None, "SELECT 1") == "gold_broken"
+
+
+def test_linking_summary_survives_agent_error_records():
+    summary = bird.summarize_linking([
+        {"linked": True, "link_fell_back": False, "full_schema_chars": 200,
+         "narrowed_schema_chars": 80},
+        {"ok": False, "failure": "error"},
+    ])
+    assert summary == {
+        "used": 1, "fell_back": 0,
+        "average_full_schema_chars": 100.0,
+        "average_narrowed_schema_chars": 40.0,
+    }
