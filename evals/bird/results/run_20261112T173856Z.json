@@ -1,0 +1,69 @@
+{
+  "run_at": "2026-11-12T17:38:56Z",
+  "benchmark": "BIRD Mini-Dev (sqlite split)",
+  "model": "deepseek-flash",
+  "agent_thinking": true,
+  "linker_thinking": false,
+  "llm_base_url": "https://api.deepseek.com/v1",
+  "agent_prompt": "bird",
+  "agent_max_iterations": 12,
+  "schema_linking": true,
+  "bird_verify_shape": true,
+  "bird_value_grounding": true,
+  "bird_sql_repair": true,
+  "limit": 50,
+  "cohort": null,
+  "cohort_manifest": null,
+  "question_ids": [
+    11,
+    51
+  ],
+  "workers": 2,
+  "commit": "1e35092",
+  "ex": 0.0,
+  "samples": 2,
+  "per_db": {
+    "california_schools": {
+      "ok": 0,
+      "n": 1
+    },
+    "card_games": {
+      "ok": 0,
+      "n": 1
+    }
+  },
+  "failures": {
+    "error": 2
+  },
+  "linking": {
+    "used": 0,
+    "fell_back": 0,
+    "average_full_schema_chars": 0.0,
+    "average_narrowed_schema_chars": 0.0
+  },
+  "wall_seconds": 0.5,
+  "results": [
+    {
+      "id": 11,
+      "db": "california_schools",
+      "difficulty": "challenging",
+      "question": "Following up on the SAT participation review: among the currently operating high schools in the district with NCES identification number 0613360 that had no SAT test takers, which one begins serving students at the earliest grade? Please give me each such school's name and grade span served. Note that a high school must actually enroll students through grade 12-offering grade 12 without enrollment doesn't count. A school with no SAT record counts as having zero SAT test takers and should be included; only exclude schools with a positive number of SAT test takers. Compare starting grades as school grades-preschool comes before kindergarten, which comes before grade 1-and use the lowest grade the school actually serves, not just what it offers. If several schools tie at the earliest grade, list them all alphabetically by school name.",
+      "ok": false,
+      "failure": "error",
+      "submitted": false,
+      "iterations": null,
+      "note": "worker died without returning a result"
+    },
+    {
+      "id": 51,
+      "db": "card_games",
+      "difficulty": "moderate",
+      "question": "What percentage of all card printings have a Simplified Chinese translation? Round to two decimals.",
+      "ok": false,
+      "failure": "error",
+      "submitted": false,
+      "iterations": null,
+      "note": "worker died without returning a result"
+    }
+  ]
+}

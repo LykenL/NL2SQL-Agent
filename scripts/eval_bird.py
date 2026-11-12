@@ -27,6 +27,7 @@ import sqlite3
 import sys
 import time
 import uuid
+import multiprocessing as mp
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Optional
@@ -241,6 +242,47 @@ def build_question(row: dict) -> str:
 
 
 # ── one question -------------------------------------------------------------
+def _isolated_worker(row: dict, sql_timeout: float, queue) -> None:
+    """Run one question in its own process so a stuck run can actually be stopped.
+
+    Module level and taking plain values: spawn pickles the target, so a closure or
+    lambda cannot be passed.
+    """
+    try:
+        queue.put((True, evaluate_one(row, sql_timeout)))
+    except Exception as exc:  # a crash is one failed question, not a lost run
+        queue.put((False, repr(exc)[:300]))
+
+
+def run_with_deadline(row: dict, sql_timeout: float, timeout: float) -> tuple[str, Any]:
+    """Run fn(row) in a child process; returns (status, value).
+
+    Threads cannot be killed, so a question that never returns would be abandoned
+    with the interpreter waiting on it at exit — which is how a 6-worker blind run
+    stalled for 22 minutes and lost 25 finished results. A process can be stopped.
+
+    "spawn", not "fork": forking after the OpenAI/httpx clients have started threads
+    segfaults the child on macOS (exit code -11, no traceback, empty queue). spawn
+    re-imports the module in the child, which costs ~2s per question but works.
+    """
+    ctx = mp.get_context("spawn")
+    queue = ctx.Queue()
+    proc = ctx.Process(target=_isolated_worker, args=(row, sql_timeout, queue), daemon=True)
+    proc.start()
+    proc.join(timeout)
+    if proc.is_alive():
+        proc.terminate()
+        proc.join(5)
+        if proc.is_alive():
+            proc.kill()
+            proc.join(5)
+        return "timeout", None
+    if queue.empty():
+        return "error", "worker died without returning a result"
+    ok, value = queue.get()
+    return ("ok", value) if ok else ("error", value)
+
+
 def evaluate_one(row: dict, sql_timeout: float = 12.0) -> dict:
     from src.core import schema_link, tracing
     from src.core.agent_loop import run_agent_loop
@@ -440,6 +482,9 @@ def main() -> int:
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--out", default="")
     ap.add_argument("--sql-timeout", type=float, default=12.0)
+    ap.add_argument("--question-timeout", type=float, default=900.0,
+                    help="wall-clock cap per question; a hung agent loop otherwise "
+                         "stalls the whole run and loses every finished result")
     ap.add_argument("--schema-linking", action="store_true",
                     help="pick relevant tables/columns with one extra call before SQL")
     ap.add_argument("--no-shape-verification", action="store_true",
@@ -526,20 +571,29 @@ def main() -> int:
     started = time.time()
     results: list[dict] = []
 
-    if args.workers <= 1:
-        for i, row in enumerate(rows, 1):
-            r = evaluate_one(row, args.sql_timeout)
+    def timeout_result(row: dict) -> dict:
+        return {"id": row["id"], "db": row["db"], "difficulty": row.get("difficulty"),
+                "question": row.get("question"), "ok": False, "failure": "timeout",
+                "submitted": False, "iterations": None,
+                "note": f"exceeded --question-timeout {args.question_timeout:.0f}s"}
+
+    def bounded(row: dict) -> dict:
+        """evaluate_one with a hard wall-clock limit, enforced by a child process."""
+        status, value = run_with_deadline(row, args.sql_timeout, args.question_timeout)
+        if status == "timeout":
+            return timeout_result(row)
+        if status == "error":
+            return {**timeout_result(row), "failure": "error", "note": value}
+        return value
+
+    workers = max(1, args.workers)
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(bounded, row): row for row in rows}
+        for done, fut in enumerate(as_completed(futures), 1):
+            r = fut.result()
             results.append(r)
-            print(f"[{i}/{len(rows)}] {r['id']} {r['db'][:18]:<18} "
-                  f"{'OK  ' if r['ok'] else 'FAIL'} {r.get('failure') or ''}")
-    else:
-        with ThreadPoolExecutor(max_workers=args.workers) as pool:
-            futures = {pool.submit(evaluate_one, row, args.sql_timeout): row for row in rows}
-            for done, fut in enumerate(as_completed(futures), 1):
-                r = fut.result()
-                results.append(r)
-                print(f"[{done}/{len(rows)}] {r['id']} {r['db'][:18]:<18} "
-                      f"{'OK  ' if r['ok'] else 'FAIL'} {r.get('failure') or ''}")
+            print(f"[{done}/{len(rows)}] {r['id']} {r['db'][:18]:<18} "
+                  f"{'OK  ' if r['ok'] else 'FAIL'} {r.get('failure') or ''}", flush=True)
 
     results.sort(key=lambda r: r["id"])
     ex = sum(1 for r in results if r["ok"]) / len(results) if results else 0.0

@@ -1,0 +1,124 @@
+{
+  "run_at": "2026-11-12T17:40:31Z",
+  "benchmark": "BIRD Mini-Dev (sqlite split)",
+  "model": "deepseek-flash",
+  "agent_thinking": true,
+  "linker_thinking": false,
+  "llm_base_url": "https://api.deepseek.com/v1",
+  "agent_prompt": "bird",
+  "agent_max_iterations": 12,
+  "schema_linking": true,
+  "bird_verify_shape": true,
+  "bird_value_grounding": true,
+  "bird_sql_repair": true,
+  "limit": 50,
+  "cohort": null,
+  "cohort_manifest": null,
+  "question_ids": [
+    11,
+    51
+  ],
+  "workers": 2,
+  "commit": "1e35092",
+  "ex": 1.0,
+  "samples": 2,
+  "per_db": {
+    "california_schools": {
+      "ok": 1,
+      "n": 1
+    },
+    "card_games": {
+      "ok": 1,
+      "n": 1
+    }
+  },
+  "failures": {},
+  "linking": {
+    "used": 2,
+    "fell_back": 0,
+    "average_full_schema_chars": 7854.5,
+    "average_narrowed_schema_chars": 6852.0
+  },
+  "wall_seconds": 31.0,
+  "results": [
+    {
+      "id": 11,
+      "db": "california_schools",
+      "question": "Following up on the SAT participation review: among the currently operating high schools in the district with NCES identification number 0613360 that had no SAT test takers, which one begins serving students at the earliest grade? Please give me each such school's name and grade span served. Note that a high school must actually enroll students through grade 12-offering grade 12 without enrollment doesn't count. A school with no SAT record counts as having zero SAT test takers and should be included; only exclude schools with a positive number of SAT test takers. Compare starting grades as school grades-preschool comes before kindergarten, which comes before grade 1-and use the lowest grade the school actually serves, not just what it offers. If several schools tie at the earliest grade, list them all alphabetically by school name.",
+      "evidence": "NCES identification number 0613360 is the school district identification number assigned by the National Center for Education Statistics.",
+      "sql": "WITH cohort AS (SELECT s.School AS school_name, s.GSserved AS grade_span_served, CASE WHEN SUBSTR(s.GSserved,1,INSTR(s.GSserved||'-','-')-1) = 'P' THEN -1 WHEN SUBSTR(s.GSserved,1,INSTR(s.GSserved||'-','-')-1) = 'K' THEN 0 ELSE CAST(SUBSTR(s.GSserved,1,INSTR(s.GSserved||'-','-')-1) AS INTEGER) END AS start_rank FROM schools s LEFT JOIN satscores t ON s.CDSCode = t.cds WHERE s.NCESDist = '0613360' AND s.StatusType = 'Active' AND s.GSserved LIKE '%12' AND COALESCE(t.NumTstTakr,0) = 0) SELECT school_name, grade_span_served FROM cohort WHERE start_rank = (SELECT MIN(start_rank) FROM cohort) ORDER BY school_name",
+      "difficulty": "challenging",
+      "ok": true,
+      "failure": null,
+      "gold_error": null,
+      "pred_error": null,
+      "gold_n": 1,
+      "pred_n": 1,
+      "iterations": 7,
+      "tool_calls": 7,
+      "seconds": 27.5,
+      "predicted_sql": "WITH hs AS (\n  SELECT sc.CDSCode, sc.School, sc.GSserved,\n         COALESCE(s.NumTstTakr, 0) AS takers,\n         CAST(substr(sc.GSserved, 1, instr(sc.GSserved,'-')-1) AS INTEGER) AS lo_grade\n  FROM schools sc\n  LEFT JOIN satscores s ON s.cds = sc.CDSCode\n  WHERE sc.NCESDist = '0613360'\n    AND sc.StatusType = 'Active'\n    AND sc.CDSCode <> '48705400000000'\n    AND sc.GSserved LIKE '%-12'\n)\nSELECT School, GSserved\nFROM hs\nWHERE takers = 0\n  AND lo_grade = (SELECT MIN(lo_grade) FROM hs WHERE takers = 0)\nORDER BY School",
+      "submitted": true,
+      "linked": true,
+      "linked_tables": [
+        "schools",
+        "satscores",
+        "frpm"
+      ],
+      "link_initial_tables": [
+        "schools",
+        "satscores",
+        "frpm"
+      ],
+      "link_added_tables": [],
+      "link_fell_back": false,
+      "link_dropped": [],
+      "full_schema_chars": 6812,
+      "narrowed_schema_chars": 6812,
+      "link_response_chars": 247,
+      "sql_count": 5,
+      "reply_chars": 188
+    },
+    {
+      "id": 51,
+      "db": "card_games",
+      "question": "What percentage of all card printings have a Simplified Chinese translation? Round to two decimals.",
+      "evidence": "",
+      "sql": "SELECT ROUND(100.0 * (SELECT COUNT(DISTINCT c.uuid) FROM cards AS c JOIN foreign_data AS f ON f.uuid = c.uuid WHERE f.language = 'Chinese Simplified') / NULLIF((SELECT COUNT(*) FROM cards), 0), 2)",
+      "difficulty": "moderate",
+      "ok": true,
+      "failure": null,
+      "gold_error": null,
+      "pred_error": null,
+      "gold_n": 1,
+      "pred_n": 1,
+      "iterations": 7,
+      "tool_calls": 8,
+      "seconds": 14.3,
+      "predicted_sql": "SELECT ROUND(100.0 * COUNT(DISTINCT CASE WHEN f.language = 'Chinese Simplified' THEN c.uuid END) / COUNT(DISTINCT c.uuid), 2) AS pct_sc\nFROM cards c\nLEFT JOIN foreign_data f ON f.uuid = c.uuid",
+      "submitted": true,
+      "linked": true,
+      "linked_tables": [
+        "cards",
+        "foreign_data",
+        "legalities",
+        "rulings"
+      ],
+      "link_initial_tables": [
+        "cards",
+        "foreign_data"
+      ],
+      "link_added_tables": [
+        "legalities",
+        "rulings"
+      ],
+      "link_fell_back": false,
+      "link_dropped": [],
+      "full_schema_chars": 8897,
+      "narrowed_schema_chars": 6892,
+      "link_response_chars": 107,
+      "sql_count": 6,
+      "reply_chars": 73
+    }
+  ]
+}
