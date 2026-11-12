@@ -39,7 +39,9 @@ from dotenv import load_dotenv  # noqa: E402
 load_dotenv(ROOT / ".env")
 
 BIRD_ROOT = ROOT / "evals" / "bird"
+COHORT_ROOT = BIRD_ROOT / "cohorts"
 DB_ROOT = BIRD_ROOT / "minidev" / "MINIDEV" / "dev_databases"
+COHORT_SIZES = {"historical": 50, "development": 100, "blind": 50}
 
 
 # ── data ---------------------------------------------------------------------
@@ -68,6 +70,69 @@ def load_questions(limit: int = 0, db_id: str = "", stratify: bool = True) -> li
         return rows[:limit] if limit else rows
 
     return stratify_rows(rows, limit)
+
+
+def _rows_for_ids(rows: list[dict], ids: list[int]) -> list[dict]:
+    by_id = {r["id"]: r for r in rows}
+    missing = [qid for qid in ids if qid not in by_id]
+    if missing:
+        raise ValueError(f"cohort refers to unavailable question ids: {missing[:5]}")
+    return [by_id[qid] for qid in ids]
+
+
+def cohort_manifest_path(cohort: str) -> Path:
+    if cohort not in COHORT_SIZES:
+        raise ValueError(f"unknown cohort: {cohort}")
+    return COHORT_ROOT / f"{cohort}.json"
+
+
+def build_cohort_manifests(rows: list[dict]) -> dict[str, dict]:
+    """Allocate three disjoint, stratified cohorts without looking at SQL results.
+
+    The historical cohort reproduces the first 50-question experiment. Development
+    may be inspected during tuning; blind is reserved for exactly one frozen run.
+    """
+    remaining = list(rows)
+    manifests: dict[str, dict] = {}
+    for cohort, size in COHORT_SIZES.items():
+        picked = stratify_rows(remaining, size)
+        ids = [r["id"] for r in picked]
+        manifests[cohort] = {
+            "benchmark": "BIRD Mini-Dev sqlite",
+            "cohort": cohort,
+            "selection": "deterministic stratified, disjoint sequential allocation",
+            "question_ids": ids,
+        }
+        picked_ids = set(ids)
+        remaining = [r for r in remaining if r["id"] not in picked_ids]
+    return manifests
+
+
+def write_cohort_manifests(rows: list[dict]) -> dict[str, Path]:
+    COHORT_ROOT.mkdir(parents=True, exist_ok=True)
+    manifests = build_cohort_manifests(rows)
+    paths: dict[str, Path] = {}
+    for name, manifest in manifests.items():
+        path = cohort_manifest_path(name)
+        path.write_text(json.dumps(manifest, indent=2) + "\n")
+        paths[name] = path
+    return paths
+
+
+def load_cohort(rows: list[dict], cohort: str) -> list[dict]:
+    path = cohort_manifest_path(cohort)
+    if not path.exists():
+        raise FileNotFoundError(
+            f"missing {path}; create frozen manifests with --write-cohort-manifests"
+        )
+    manifest = json.loads(path.read_text())
+    if manifest.get("cohort") != cohort:
+        raise ValueError(f"cohort manifest mismatch in {path}")
+    selected = _rows_for_ids(rows, manifest.get("question_ids", []))
+    expected = COHORT_SIZES[cohort]
+    if len(selected) != expected:
+        raise ValueError(f"{cohort} cohort has {len(selected)} questions; expected {expected}")
+    return selected
 
 
 def stratify_rows(rows: list[dict], limit: int) -> list[dict]:
@@ -326,6 +391,10 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--limit", type=int, default=50)
+    ap.add_argument("--cohort", choices=sorted(COHORT_SIZES),
+                    help="use a frozen, disjoint benchmark cohort (ignores --limit)")
+    ap.add_argument("--write-cohort-manifests", action="store_true",
+                    help="create the frozen cohort manifests, then exit without model calls")
     ap.add_argument("--db", default="", help="restrict to one database id")
     ap.add_argument("--workers", type=int, default=1)
     ap.add_argument("--dry-run", action="store_true")
@@ -346,10 +415,21 @@ def main() -> int:
 
     from src.core.tracing import llm_model, thinking_enabled
 
-    rows = load_questions(args.limit, args.db, stratify=not args.no_stratify)
+    all_rows = load_questions(0, args.db, stratify=False)
+    if args.write_cohort_manifests:
+        if args.db:
+            ap.error("--write-cohort-manifests cannot be combined with --db")
+        paths = write_cohort_manifests(all_rows)
+        for cohort, path in paths.items():
+            print(f"wrote {cohort}: {path}")
+        return 0
+    rows = load_cohort(all_rows, args.cohort) if args.cohort else (
+        stratify_rows(all_rows, args.limit) if not args.no_stratify else all_rows[:args.limit]
+    )
     print(f"model    {llm_model()}  (thinking: {'on' if thinking_enabled() else 'off'})")
     print(f"prompt   {os.getenv('AGENT_PROMPT')}   max_iterations {os.getenv('AGENT_MAX_ITERATIONS')}")
-    print(f"questions {len(rows)}  workers {args.workers}")
+    print(f"questions {len(rows)}  workers {args.workers}"
+          + (f"  cohort {args.cohort}" if args.cohort else ""))
     from collections import Counter
     counts = Counter(r["db"] for r in rows)
     print(f"databases {len(counts)}  {'(stratified)' if not args.no_stratify else '(first N)'}")
@@ -418,6 +498,9 @@ def main() -> int:
         "model": llm_model(),
         "thinking": thinking_enabled(),
         "limit": args.limit,
+        "cohort": args.cohort,
+        "cohort_manifest": str(cohort_manifest_path(args.cohort)) if args.cohort else None,
+        "question_ids": [r["id"] for r in rows],
         "workers": args.workers,
         "commit": _git_sha(),
         "ex": round(ex, 4),

@@ -167,6 +167,28 @@ def test_stratify_never_exceeds_available():
     assert len(got) == 5
 
 
+def test_cohort_manifests_are_disjoint_and_keep_historical_sample():
+    rows = _fake_dataset({"a": 200, "b": 200, "c": 100})
+    manifests = bird.build_cohort_manifests(rows)
+
+    historical = manifests["historical"]["question_ids"]
+    development = manifests["development"]["question_ids"]
+    blind = manifests["blind"]["question_ids"]
+    assert historical == [r["id"] for r in bird.stratify_rows(rows, 50)]
+    assert len(historical) == 50
+    assert len(development) == 100
+    assert len(blind) == 50
+    assert not (set(historical) & set(development))
+    assert not (set(historical) & set(blind))
+    assert not (set(development) & set(blind))
+
+
+def test_rows_for_ids_preserves_manifest_order():
+    rows = _fake_dataset({"a": 3})
+    selected = bird._rows_for_ids(rows, [2, 0])
+    assert [r["id"] for r in selected] == [2, 0]
+
+
 def test_inspection_query_rejected_by_submit():
     """A bare column dump is never the answer; the agent runs out of turns and
     submits one, which is how a thrombosis question produced 1238 rows."""
