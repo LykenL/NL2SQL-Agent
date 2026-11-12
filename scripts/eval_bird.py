@@ -396,7 +396,11 @@ def evaluate_one(row: dict, sql_timeout: float = 12.0) -> dict:
         "iterations": int(trace.get("iterations", 0)),
         "tool_calls": len(used),
         "seconds": round(seconds, 1),
-        "predicted_sql": (predicted or "")[:800],
+        # Full SQL, not a preview: a truncated prediction cannot be re-scored with
+        # BIRD's own evaluation_ex.py, which is the only way to prove the EX we
+        # report is the EX the benchmark defines.
+        "predicted_sql": predicted or "",
+        "gold_sql": row.get("sql") or "",
         "submitted": bool(submitted),
         "linked": link_info["used"],
         "linked_tables": link_info["tables"],
