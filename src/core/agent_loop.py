@@ -422,7 +422,7 @@ def _run_agent_turns(user_message, session_id, client, tools_schema, tool_map,
             temperature=0.0,
             # DeepSeek ignores temperature while thinking; disabling thinking is
             # what makes the deterministic setting actually apply.
-            extra_body=tracing.extra_body(),
+            extra_body=tracing.extra_body(tracing.agent_thinking_enabled()),
             **_call_kwargs,
         )
         msg = response.choices[0].message

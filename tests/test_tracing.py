@@ -82,6 +82,26 @@ def test_model_name_is_overridable(monkeypatch):
     assert tracing.llm_model() == "deepseek-reasoner"
 
 
+def test_agent_and_linker_thinking_are_independent(monkeypatch):
+    monkeypatch.delenv("LLM_THINKING", raising=False)
+    monkeypatch.setenv("AGENT_THINKING", "on")
+    monkeypatch.delenv("LINKER_THINKING", raising=False)
+    assert tracing.agent_thinking_enabled() is True
+    assert tracing.linker_thinking_enabled() is False
+    assert tracing.extra_body(tracing.agent_thinking_enabled()) == {
+        "thinking": {"type": "enabled"}}
+    assert tracing.extra_body(tracing.linker_thinking_enabled()) == {
+        "thinking": {"type": "disabled"}}
+
+
+def test_legacy_thinking_variable_remains_agent_fallback(monkeypatch):
+    monkeypatch.setenv("LLM_THINKING", "on")
+    monkeypatch.delenv("AGENT_THINKING", raising=False)
+    monkeypatch.delenv("LINKER_THINKING", raising=False)
+    assert tracing.agent_thinking_enabled() is True
+    assert tracing.linker_thinking_enabled() is False
+
+
 def test_system_prompt_is_replaced_in_traced_messages():
     msgs = [
         {"role": "system", "content": "x" * 5000},

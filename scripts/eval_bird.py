@@ -258,11 +258,17 @@ def evaluate_one(row: dict, sql_timeout: float = 12.0) -> dict:
     # Schema linking: narrow the schema the agent sees before it writes SQL.
     # A bad shortlist would be worse than none, so the full schema is restored on
     # any lookup failure and the run record says whether it was used.
-    link_info = {"used": False, "tables": [], "fell_back": False, "dropped_tables": []}
+    full_schema_chars = len(ds.schema_json())
+    link_info = {
+        "used": False, "tables": [], "fell_back": False, "dropped_tables": [],
+        "full_schema_chars": full_schema_chars, "narrowed_schema_chars": full_schema_chars,
+        "link_response_chars": 0,
+    }
     if schema_link.enabled():
         question_text = build_question(row)
         full = ds.schema_json()
         links = schema_link.select_links(full, question_text)
+        link_info["link_response_chars"] = int(links.get("raw_chars", 0)) if links else 0
         check = schema_link.verify_links(full, links) if links else {"ok": False, "tables": [], "dropped": []}
         if check["ok"]:
             # A hallucinated table name is dropped, not fatal: the rest of the
@@ -271,6 +277,7 @@ def evaluate_one(row: dict, sql_timeout: float = 12.0) -> dict:
                      "columns": {t: c for t, c in (links.get("columns") or {}).items()
                                  if t in check["tables"]}}
             narrowed = schema_link.apply_links(full, links)
+            link_info["narrowed_schema_chars"] = len(narrowed)
             if narrowed != full:
                 for name, fn in list(tool_map.items()):
                     if name == "get_database_schema":
@@ -340,6 +347,9 @@ def evaluate_one(row: dict, sql_timeout: float = 12.0) -> dict:
         "linked_tables": link_info["tables"],
         "link_fell_back": link_info["fell_back"],
         "link_dropped": link_info.get("dropped_tables", []),
+        "full_schema_chars": link_info["full_schema_chars"],
+        "narrowed_schema_chars": link_info["narrowed_schema_chars"],
+        "link_response_chars": link_info["link_response_chars"],
         "sql_count": len(ds.executed_sql),
         "reply_chars": len(reply or ""),
     }
@@ -413,7 +423,9 @@ def main() -> int:
     if args.schema_linking:
         os.environ["SCHEMA_LINKING"] = "on"
 
-    from src.core.tracing import llm_model, thinking_enabled
+    from src.core import schema_link
+    from src.core.tracing import (agent_thinking_enabled, linker_thinking_enabled,
+                                  llm_base_url, llm_model)
 
     all_rows = load_questions(0, args.db, stratify=False)
     if args.write_cohort_manifests:
@@ -426,7 +438,8 @@ def main() -> int:
     rows = load_cohort(all_rows, args.cohort) if args.cohort else (
         stratify_rows(all_rows, args.limit) if not args.no_stratify else all_rows[:args.limit]
     )
-    print(f"model    {llm_model()}  (thinking: {'on' if thinking_enabled() else 'off'})")
+    print(f"model    {llm_model()}  (agent thinking: {'on' if agent_thinking_enabled() else 'off'}; "
+          f"linker thinking: {'on' if linker_thinking_enabled() else 'off'})")
     print(f"prompt   {os.getenv('AGENT_PROMPT')}   max_iterations {os.getenv('AGENT_MAX_ITERATIONS')}")
     print(f"questions {len(rows)}  workers {args.workers}"
           + (f"  cohort {args.cohort}" if args.cohort else ""))
@@ -496,7 +509,12 @@ def main() -> int:
         "run_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "benchmark": "BIRD Mini-Dev (sqlite split)",
         "model": llm_model(),
-        "thinking": thinking_enabled(),
+        "agent_thinking": agent_thinking_enabled(),
+        "linker_thinking": linker_thinking_enabled(),
+        "llm_base_url": llm_base_url(),
+        "agent_prompt": os.getenv("AGENT_PROMPT"),
+        "agent_max_iterations": int(os.getenv("AGENT_MAX_ITERATIONS", "7")),
+        "schema_linking": schema_link.enabled(),
         "limit": args.limit,
         "cohort": args.cohort,
         "cohort_manifest": str(cohort_manifest_path(args.cohort)) if args.cohort else None,
@@ -508,6 +526,12 @@ def main() -> int:
         "per_db": {db: {"ok": sum(1 for r in items if r["ok"]), "n": len(items)}
                    for db, items in by_db.items()},
         "failures": fails,
+        "linking": {
+            "used": sum(1 for r in results if r["linked"]),
+            "fell_back": sum(1 for r in results if r["link_fell_back"]),
+            "average_full_schema_chars": round(sum(r.get("full_schema_chars", 0) for r in results) / len(results), 1) if results else 0,
+            "average_narrowed_schema_chars": round(sum(r.get("narrowed_schema_chars", 0) for r in results) / len(results), 1) if results else 0,
+        },
         "wall_seconds": round(time.time() - started, 1),
         "results": results,
     }

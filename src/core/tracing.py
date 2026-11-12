@@ -98,19 +98,41 @@ def llm_model() -> str:
     return os.getenv("AGENT_MODEL") or DEFAULT_MODEL
 
 
-def thinking_enabled() -> bool:
-    """Whether the model should emit a chain of thought.
+def _env_enabled(name: str, default: bool = False) -> bool:
+    return os.getenv(name, "on" if default else "off").lower() in _TRUTHY
 
-    Off by default: this agent's loop is tool-call driven, so visible reasoning
-    triples the output tokens for no accuracy gain. Set LLM_THINKING=on to test
-    the alternative.
+
+def agent_thinking_enabled() -> bool:
+    """Whether the SQL-writing agent may use reasoning tokens.
+
+    ``LLM_THINKING`` remains a backwards-compatible fallback. Benchmark runs
+    should prefer ``AGENT_THINKING`` so the linker is not accidentally changed
+    with the main capability variable.
     """
-    return os.getenv("LLM_THINKING", "off").lower() in {"1", "on", "true", "yes"}
+    if "AGENT_THINKING" in os.environ:
+        return _env_enabled("AGENT_THINKING")
+    return _env_enabled("LLM_THINKING")
 
 
-def extra_body() -> dict:
+def linker_thinking_enabled() -> bool:
+    """Whether the small JSON schema-linking call may use reasoning tokens.
+
+    It is deliberately off by default: a short link response can otherwise be
+    consumed entirely by reasoning, yielding no JSON and a silent full-schema
+    fallback.
+    """
+    return _env_enabled("LINKER_THINKING")
+
+
+def thinking_enabled() -> bool:
+    """Deprecated alias retained for callers that mean agent thinking."""
+    return agent_thinking_enabled()
+
+
+def extra_body(thinking: Optional[bool] = None) -> dict:
     """DeepSeek-only request fields that the OpenAI SDK passes through verbatim."""
-    return {"thinking": {"type": "enabled" if thinking_enabled() else "disabled"}}
+    enabled_for_call = agent_thinking_enabled() if thinking is None else thinking
+    return {"thinking": {"type": "enabled" if enabled_for_call else "disabled"}}
 
 
 def openai_client() -> Any:

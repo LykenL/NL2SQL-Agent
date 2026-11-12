@@ -81,7 +81,7 @@ def select_links(schema_json: str, question: str, model: str = "",
         # reasoning, finish_reason came back as "length" and content was empty —
         # which silently looked like "no shortlist" on two thirds of the runs.
         "max_tokens": 1200,
-        "extra_body": tracing.extra_body(),
+        "extra_body": tracing.extra_body(tracing.linker_thinking_enabled()),
     }
     try:
         resp = client.chat.completions.create(**kwargs)
