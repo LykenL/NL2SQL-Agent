@@ -121,14 +121,20 @@ def _coerce_tool_args(fn, args: dict) -> dict:
     """
     import inspect
 
+    # A wrapper added for telemetry (eval_bird does exactly this) exposes *a, **k,
+    # which looks like "accepts anything" and silently defeats this function. The
+    # real signature is behind __wrapped__ once the wrapper uses functools.wraps.
+    target = inspect.unwrap(fn)
     try:
-        params = inspect.signature(fn).parameters
+        params = inspect.signature(target).parameters
     except (TypeError, ValueError):
         return args
     if any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()):
         return args
 
     accepted = set(params)
+    if not accepted:
+        return args
     fitted = {k: v for k, v in args.items() if k in accepted}
     # common aliases the model reaches for
     aliases = {
@@ -137,6 +143,10 @@ def _coerce_tool_args(fn, args: dict) -> dict:
         "python": "code_string",
         "query": "sql",
         "sql_query": "sql",
+        "table_name": "table",
+        "tbl": "table",
+        "column_name": "column",
+        "col": "column",
     }
     for given, value in args.items():
         target = aliases.get(given)
@@ -233,8 +243,34 @@ def run_agent_loop(
     langfuse_turn is an existing root span (opened by the API for the whole
     request). When omitted, one is opened here so direct callers are traced too.
     """
-    sqlite_mem = SQLiteMemory()
-    vector_mem = VectorMemory()
+    # Episodic memory is product behaviour, not benchmark behaviour. In benchmark
+    # mode it is a liability: DATABASE_URL points at a serverless Postgres whose
+    # pooler drops connections under concurrent workers (three blind questions died
+    # with "psycopg: server closed the connection unexpectedly"), and the vector
+    # store's embeddings endpoint is a local Ollama that is no longer running.
+    _bench = os.getenv("AGENT_PROMPT", "").lower() == "bird"
+
+    class _NoMemory:
+        def get_recent_context(self, *a, **k):
+            return []
+
+        def add_message(self, *a, **k):
+            return None
+
+        def search_memory(self, *a, **k):
+            return []
+
+    try:
+        sqlite_mem = (
+            SQLiteMemory("sqlite:///data/episodic_memory/benchmark.sqlite")
+            if _bench else SQLiteMemory()
+        )
+    except Exception:
+        sqlite_mem = _NoMemory()
+    try:
+        vector_mem = None if _bench else VectorMemory()
+    except Exception:
+        vector_mem = None
 
     # ── Confirmed business definitions for this question ─────────────────────
     # Enforcement is on by default; SEMANTIC_ENFORCE=off disables both the
@@ -471,7 +507,11 @@ def _run_agent_turns(user_message, session_id, client, tools_schema, tool_map,
     # `chat-turn` alone in one trace and every tool/generation in another.
     ctx = traced_ctx if hasattr(traced_ctx, "to_trace_context") else _NullTraceCtx()
     messages = [{"role": "system", "content": system_instruction}]
-    history = sqlite_mem.get_recent_context(session_id, limit=10)
+    # Memory is best-effort: a dropped database connection is not an answer.
+    try:
+        history = sqlite_mem.get_recent_context(session_id, limit=10)
+    except Exception:
+        history = []
     for msg in history:
         # Old rows were stored before the no-code rule existed; never replay a
         # script back into the context, otherwise the model imitates it.
@@ -480,9 +520,17 @@ def _run_agent_turns(user_message, session_id, client, tools_schema, tool_map,
             content = strip_code_fences(content)
         messages.append({"role": msg["role"], "content": content})
         
-    recalled_memories = vector_mem.search_memory(user_message, n_results=1)
-    
-    sqlite_mem.add_message(session_id, "user", user_message)
+    try:
+        recalled_memories = (
+            vector_mem.search_memory(user_message, n_results=1) if vector_mem else []
+        )
+    except Exception:
+        recalled_memories = []
+
+    try:
+        sqlite_mem.add_message(session_id, "user", user_message)
+    except Exception:
+        pass
 
     if traced_turn is not None:
         traced_turn.update(input={"question": user_message})
@@ -671,7 +719,10 @@ def _run_agent_turns(user_message, session_id, client, tools_schema, tool_map,
 
     # Persist the scrubbed version so history replay can never re-teach the model
     # to paste code into the chat.
-    sqlite_mem.add_message(session_id, "assistant", final_text)
+    try:
+        sqlite_mem.add_message(session_id, "assistant", final_text)
+    except Exception:
+        pass
     
     exec_time = time.time() - start_time
     # Reported to callers without widening the return signature. The dict wins

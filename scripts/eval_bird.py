@@ -21,6 +21,7 @@ Cost control: --limit picks the first N questions (sorted by question_id);
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import os
 import sqlite3
@@ -342,6 +343,10 @@ def evaluate_one(row: dict, sql_timeout: float = 12.0) -> dict:
         def wrap(*a, _n=name, _f=fn, **k):
             used.append(_n)
             return _f(*a, **k)
+        # Without wraps(), the wrapper exposes *a/**k as its signature, and the
+        # agent's argument coercion then sees "accepts anything" and passes a bad
+        # keyword straight through — which is how two questions died on TypeError.
+        functools.update_wrapper(wrap, fn)
         tool_map[name] = wrap
 
     trace: dict = {}

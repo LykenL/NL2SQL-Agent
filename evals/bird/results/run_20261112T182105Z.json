@@ -1,0 +1,131 @@
+{
+  "run_at": "2026-11-12T18:21:05Z",
+  "benchmark": "BIRD Mini-Dev (sqlite split)",
+  "model": "deepseek-flash",
+  "agent_thinking": true,
+  "linker_thinking": false,
+  "llm_base_url": "https://api.deepseek.com/v1",
+  "agent_prompt": "bird",
+  "agent_max_iterations": 12,
+  "schema_linking": true,
+  "bird_verify_shape": true,
+  "bird_value_grounding": true,
+  "bird_sql_repair": true,
+  "limit": 50,
+  "cohort": null,
+  "cohort_manifest": null,
+  "question_ids": [
+    20,
+    205
+  ],
+  "workers": 2,
+  "commit": "6ddaf2a",
+  "ex": 1.0,
+  "samples": 2,
+  "per_db": {
+    "california_schools": {
+      "ok": 1,
+      "n": 1
+    },
+    "financial": {
+      "ok": 1,
+      "n": 1
+    }
+  },
+  "failures": {},
+  "linking": {
+    "used": 2,
+    "fell_back": 0,
+    "average_full_schema_chars": 6012.0,
+    "average_narrowed_schema_chars": 5788.5
+  },
+  "wall_seconds": 64.3,
+  "results": [
+    {
+      "id": 20,
+      "db": "california_schools",
+      "question": "I'm reviewing administrator coverage across Amador and Madera counties, and I want to see which administrator first names actually cover the most schools. For the two administrator first names whose holders run the most schools across the two counties (ranking names by the number of schools their holders run, with the alphabetically earlier name ranking higher if two names run equally many schools), please give me one row per public school district in those two counties and per those two first names, showing the district name, the first name, and the number of schools in that district run by an administrator with that first name - including every public school district, even ones where that's zero. Every administrator listed for a school counts, not just the first-listed one. A public school district means a unified school district, an elementary school district, a high school district, or a county office of education, and only Amador and Madera counties are in scope.",
+      "evidence": "",
+      "sql": "WITH scope AS ( SELECT CDSCode, District, AdmFName1 AS fn FROM schools WHERE County IN ('Amador','Madera') AND DOCType IN ('Unified School District','Elementary School District','High School District','County Office of Education (COE)') AND AdmFName1 IS NOT NULL UNION SELECT CDSCode, District, AdmFName2 FROM schools WHERE County IN ('Amador','Madera') AND DOCType IN ('Unified School District','Elementary School District','High School District','County Office of Education (COE)') AND AdmFName2 IS NOT NULL UNION SELECT CDSCode, District, AdmFName3 FROM schools WHERE County IN ('Amador','Madera') AND DOCType IN ('Unified School District','Elementary School District','High School District','County Office of Education (COE)') AND AdmFName3 IS NOT NULL ), ranked AS ( SELECT fn, COUNT(DISTINCT CDSCode) AS schools_run FROM scope GROUP BY fn ORDER BY schools_run DESC, fn ASC LIMIT 2 ), districts AS ( SELECT DISTINCT District FROM schools WHERE County IN ('Amador','Madera') AND DOCType IN ('Unified School District','Elementary School District','High School District','County Office of Education (COE)') ) SELECT d.District AS district_name, r.fn AS first_name, ( SELECT COUNT(DISTINCT s.CDSCode) FROM scope s WHERE s.District = d.District AND s.fn = r.fn ) AS school_count FROM districts d CROSS JOIN ranked r ORDER BY d.District, r.fn",
+      "difficulty": "challenging",
+      "ok": true,
+      "failure": null,
+      "gold_error": null,
+      "pred_error": null,
+      "gold_n": 50,
+      "pred_n": 50,
+      "iterations": 11,
+      "tool_calls": 15,
+      "seconds": 61.1,
+      "predicted_sql": "WITH districts AS (\n  SELECT DISTINCT County, District\n  FROM schools\n  WHERE County IN ('Amador','Madera') AND DOC IN ('00','52','54','56')\n),\nnames(fn) AS (VALUES ('Avetik'),('Stacy')),\nadmin_schools AS (\n  SELECT CDSCode, County, District, AdmFName1 AS fn FROM schools\n   WHERE County IN ('Amador','Madera') AND School IS NOT NULL AND TRIM(School) NOT IN ('','NaN')\n  UNION ALL\n  SELECT CDSCode, County, District, AdmFName2 FROM schools\n   WHERE County IN ('Amador','Madera') AND School IS NOT NULL AND TRIM(School) NOT IN ('','NaN')\n  UNION ALL\n  SELECT CDSCode, County, District, AdmFName3 FROM schools\n   WHERE County IN ('Amador','Madera') AND School IS NOT NULL AND TRIM(School) NOT IN ('','NaN')\n),\ncnt AS (\n  SELECT County, District, fn, COUNT(DISTINCT CDSCode) AS n\n  FROM admin_schools\n  ",
+      "submitted": false,
+      "linked": true,
+      "linked_tables": [
+        "schools",
+        "frpm",
+        "satscores"
+      ],
+      "link_initial_tables": [
+        "schools"
+      ],
+      "link_added_tables": [
+        "frpm",
+        "satscores"
+      ],
+      "link_fell_back": false,
+      "link_dropped": [],
+      "full_schema_chars": 6812,
+      "narrowed_schema_chars": 6812,
+      "link_response_chars": 132,
+      "sql_count": 13,
+      "reply_chars": 73
+    },
+    {
+      "id": 205,
+      "db": "financial",
+      "question": "Among the bank's five most populous districts (the five with the largest numbers of inhabitants), which carries the heaviest active-lending burden relative to the account base it serves? For each of those five districts, please give me the district name and the average active loan per account, rounded to the nearest whole koruna. An active loan is a running loan contract with status 'C' (repaid OK so far) or status 'D' (client in debt). The average should be taken over every account held in the district, not just accounts with loans, and accounts and their loans count toward the district of the branch that holds the account, not the client's district. If several districts tie for the highest average, list them all.",
+      "evidence": "",
+      "sql": "WITH populous AS (SELECT district_id FROM district ORDER BY CAST(A4 AS INTEGER) DESC LIMIT 5), per_district AS (SELECT d.A2 AS district_name, SUM(CASE WHEN l.status IN ('C','D') THEN l.amount ELSE 0 END) * 1.0 / COUNT(a.account_id) AS raw_avg FROM district d JOIN account a ON a.district_id = d.district_id LEFT JOIN loan l ON l.account_id = a.account_id WHERE d.district_id IN (SELECT district_id FROM populous) GROUP BY d.district_id, d.A2) SELECT district_name, ROUND(raw_avg, 0) AS avg_active_loan_per_account FROM per_district ORDER BY raw_avg DESC, district_name",
+      "difficulty": "challenging",
+      "ok": true,
+      "failure": null,
+      "gold_error": null,
+      "pred_error": null,
+      "gold_n": 5,
+      "pred_n": 5,
+      "iterations": 5,
+      "tool_calls": 8,
+      "seconds": 20.8,
+      "predicted_sql": "WITH top5 AS (\n  SELECT district_id, A2 AS district_name, CAST(A4 AS INTEGER) AS population\n  FROM district\n  ORDER BY CAST(A4 AS INTEGER) DESC\n  LIMIT 5\n), district_accounts AS (\n  SELECT district_id, COUNT(*) AS n_accounts\n  FROM account\n  GROUP BY district_id\n), district_active AS (\n  SELECT a.district_id, SUM(l.amount) AS total_active_loan_amount\n  FROM account AS a\n  JOIN loan AS l\n    ON l.account_id = a.account_id\n   AND l.status IN ('C', 'D')\n  GROUP BY a.district_id\n)\nSELECT\n  t.district_name,\n  CAST(ROUND(COALESCE(da.total_active_loan_amount, 0) * 1.0 / dac.n_accounts, 0) AS INTEGER) AS avg_active_loan_per_account\nFROM top5 AS t\nJOIN district_accounts AS dac\n  ON dac.district_id = t.district_id\nLEFT JOIN district_active AS da\n  ON da.district_id = t.district_id\nORDER BY avg_activ",
+      "submitted": true,
+      "linked": true,
+      "linked_tables": [
+        "district",
+        "account",
+        "loan",
+        "client",
+        "disp",
+        "order",
+        "trans"
+      ],
+      "link_initial_tables": [
+        "district",
+        "account",
+        "loan"
+      ],
+      "link_added_tables": [
+        "client",
+        "disp",
+        "order",
+        "trans"
+      ],
+      "link_fell_back": false,
+      "link_dropped": [],
+      "full_schema_chars": 5212,
+      "narrowed_schema_chars": 4765,
+      "link_response_chars": 195,
+      "sql_count": 6,
+      "reply_chars": 73
+    }
+  ]
+}
