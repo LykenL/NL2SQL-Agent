@@ -1,0 +1,81 @@
+{
+  "run_at": "2026-11-12T17:32:02Z",
+  "benchmark": "BIRD Mini-Dev (sqlite split)",
+  "model": "deepseek-flash",
+  "agent_thinking": true,
+  "linker_thinking": false,
+  "llm_base_url": "https://api.deepseek.com/v1",
+  "agent_prompt": "bird",
+  "agent_max_iterations": 12,
+  "schema_linking": true,
+  "bird_verify_shape": true,
+  "bird_value_grounding": true,
+  "bird_sql_repair": true,
+  "limit": 50,
+  "cohort": null,
+  "cohort_manifest": null,
+  "question_ids": [
+    51
+  ],
+  "workers": 1,
+  "commit": "a049af4",
+  "ex": 1.0,
+  "samples": 1,
+  "per_db": {
+    "card_games": {
+      "ok": 1,
+      "n": 1
+    }
+  },
+  "failures": {},
+  "linking": {
+    "used": 1,
+    "fell_back": 0,
+    "average_full_schema_chars": 8897.0,
+    "average_narrowed_schema_chars": 6892.0
+  },
+  "wall_seconds": 15.6,
+  "results": [
+    {
+      "id": 51,
+      "db": "card_games",
+      "question": "What percentage of all card printings have a Simplified Chinese translation? Round to two decimals.",
+      "evidence": "",
+      "sql": "SELECT ROUND(100.0 * (SELECT COUNT(DISTINCT c.uuid) FROM cards AS c JOIN foreign_data AS f ON f.uuid = c.uuid WHERE f.language = 'Chinese Simplified') / NULLIF((SELECT COUNT(*) FROM cards), 0), 2)",
+      "difficulty": "moderate",
+      "ok": true,
+      "failure": null,
+      "gold_error": null,
+      "pred_error": null,
+      "gold_n": 1,
+      "pred_n": 1,
+      "iterations": 7,
+      "tool_calls": 7,
+      "seconds": 11.4,
+      "predicted_sql": "SELECT ROUND(100.0 * SUM(CASE WHEN uuid IN (SELECT uuid FROM foreign_data WHERE language='Chinese Simplified') THEN 1 ELSE 0 END) / COUNT(*), 2) AS pct\nFROM cards",
+      "submitted": true,
+      "linked": true,
+      "linked_tables": [
+        "cards",
+        "foreign_data",
+        "legalities",
+        "rulings"
+      ],
+      "link_initial_tables": [
+        "cards",
+        "foreign_data"
+      ],
+      "link_added_tables": [
+        "legalities",
+        "rulings"
+      ],
+      "link_fell_back": false,
+      "link_dropped": [],
+      "full_schema_chars": 8897,
+      "narrowed_schema_chars": 6892,
+      "link_response_chars": 107,
+      "sql_count": 5,
+      "reply_chars": 73
+    }
+  ]
+}

@@ -1,0 +1,172 @@
+{
+ "merged_from": [
+  "/tmp/think_run.log",
+  "run_20261112T173202Z.json"
+ ],
+ "config": {
+  "thinking": "on",
+  "effort": "low",
+  "schema_linking": true
+ },
+ "questions": 26,
+ "passing": 16,
+ "ex": 0.615,
+ "results": [
+  {
+   "id": 2,
+   "db": "california_schools",
+   "ok": false,
+   "failure": "wrong_result"
+  },
+  {
+   "id": 11,
+   "db": "california_schools",
+   "ok": true,
+   "failure": "No"
+  },
+  {
+   "id": 51,
+   "db": "card_games",
+   "ok": true,
+   "failure": null
+  },
+  {
+   "id": 87,
+   "db": "card_games",
+   "ok": true,
+   "failure": "No"
+  },
+  {
+   "id": 96,
+   "db": "card_games",
+   "ok": false,
+   "failure": "wrong_result"
+  },
+  {
+   "id": 105,
+   "db": "card_games",
+   "ok": false,
+   "failure": "wrong_result"
+  },
+  {
+   "id": 120,
+   "db": "codebase_community",
+   "ok": false,
+   "failure": "wrong_result"
+  },
+  {
+   "id": 165,
+   "db": "european_football_",
+   "ok": false,
+   "failure": "wrong_result"
+  },
+  {
+   "id": 175,
+   "db": "european_football_",
+   "ok": true,
+   "failure": "No"
+  },
+  {
+   "id": 196,
+   "db": "financial",
+   "ok": false,
+   "failure": "wrong_result"
+  },
+  {
+   "id": 205,
+   "db": "financial",
+   "ok": true,
+   "failure": "No"
+  },
+  {
+   "id": 214,
+   "db": "financial",
+   "ok": true,
+   "failure": "No"
+  },
+  {
+   "id": 232,
+   "db": "financial",
+   "ok": true,
+   "failure": "No"
+  },
+  {
+   "id": 250,
+   "db": "formula_1",
+   "ok": true,
+   "failure": "No"
+  },
+  {
+   "id": 259,
+   "db": "formula_1",
+   "ok": true,
+   "failure": "No"
+  },
+  {
+   "id": 286,
+   "db": "formula_1",
+   "ok": true,
+   "failure": "No"
+  },
+  {
+   "id": 297,
+   "db": "student_club",
+   "ok": false,
+   "failure": "wrong_result"
+  },
+  {
+   "id": 334,
+   "db": "superhero",
+   "ok": true,
+   "failure": "No"
+  },
+  {
+   "id": 354,
+   "db": "superhero",
+   "ok": false,
+   "failure": "wrong_result"
+  },
+  {
+   "id": 365,
+   "db": "superhero",
+   "ok": false,
+   "failure": "wrong_result"
+  },
+  {
+   "id": 375,
+   "db": "superhero",
+   "ok": true,
+   "failure": "No"
+  },
+  {
+   "id": 394,
+   "db": "thrombosis_predict",
+   "ok": true,
+   "failure": "No"
+  },
+  {
+   "id": 404,
+   "db": "thrombosis_predict",
+   "ok": true,
+   "failure": "No"
+  },
+  {
+   "id": 415,
+   "db": "thrombosis_predict",
+   "ok": true,
+   "failure": "No"
+  },
+  {
+   "id": 470,
+   "db": "toxicology",
+   "ok": false,
+   "failure": "wrong_result"
+  },
+  {
+   "id": 480,
+   "db": "toxicology",
+   "ok": true,
+   "failure": "No"
+  }
+ ]
+}
