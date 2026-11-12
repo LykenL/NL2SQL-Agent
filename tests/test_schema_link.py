@@ -202,3 +202,59 @@ def test_inspection_query_rejected_by_submit():
     assert not at._LOOKS_LIKE_INSPECTION.match(
         "SELECT ID FROM Patient WHERE PLT > 100")
     assert not at._LOOKS_LIKE_INSPECTION.match("SELECT 1")
+
+
+def test_bird_shape_feedback_flags_scalar_row_dump():
+    import src.core.agent_tools as at
+
+    feedback = at._bird_shape_feedback(
+        "How many schools are in Alameda County?",
+        "SELECT School, County FROM schools WHERE County = 'Alameda'",
+        ["School", "County"], 12,
+    )
+    assert feedback.startswith("WARN:")
+    assert "no aggregate" in feedback
+    assert "2 columns" in feedback
+    assert "12 rows" in feedback
+
+
+def test_bird_shape_feedback_accepts_scalar_aggregate():
+    import src.core.agent_tools as at
+
+    feedback = at._bird_shape_feedback(
+        "How many schools are in Alameda County?",
+        "SELECT COUNT(*) FROM schools WHERE County = 'Alameda'",
+        ["COUNT(*)"], 1,
+    )
+    assert feedback.startswith("PASS:")
+
+
+def test_bird_optional_guard_tools_require_validated_submission(monkeypatch):
+    import pandas as pd
+    from src.core.agent_tools import create_agent_tools
+    from src.core.datasource import DataSource
+
+    class FakeSource(DataSource):
+        dialect = "sqlite"
+        label = "fake"
+
+        def schema_json(self):
+            return '{"schools": {"columns": [{"name": "County"}]}}'
+
+        def run(self, sql, max_rows=1000):
+            if "COUNT" in sql:
+                return pd.DataFrame({"COUNT(*)": [3]})
+            return pd.DataFrame({"County": ["Alameda", "Orange"]})
+
+    monkeypatch.setenv("AGENT_PROMPT", "bird")
+    monkeypatch.setenv("BIRD_VERIFY_SHAPE", "on")
+    monkeypatch.setenv("BIRD_VALUE_GROUNDING", "on")
+    _, tool_map = create_agent_tools(
+        source=FakeSource(), benchmark_question="How many schools are in Alameda County?"
+    )
+    assert "validate_query_shape" in tool_map
+    assert "sample_column_values" in tool_map
+    sql = "SELECT COUNT(*) FROM schools WHERE County = 'Alameda'"
+    assert "validate_query_shape" in tool_map["submit_query"](sql)
+    assert tool_map["validate_query_shape"](sql).startswith("PASS:")
+    assert tool_map["submit_query"](sql).startswith("submitted")

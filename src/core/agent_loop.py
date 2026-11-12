@@ -103,6 +103,27 @@ Workflow:
 """
 
 
+def _bird_experiment_instruction() -> str:
+    """Feature-flagged benchmark guidance kept out of the product prompt."""
+    additions: list[str] = []
+    if os.getenv("BIRD_VERIFY_SHAPE", "off").lower() in {"1", "on", "true", "yes"}:
+        additions.append(
+            "Before submit_query, call validate_query_shape with the exact final SQL. "
+            "If it returns WARN or FAIL, correct the query and validate the corrected SQL again."
+        )
+    if os.getenv("BIRD_VALUE_GROUNDING", "off").lower() in {"1", "on", "true", "yes"}:
+        additions.append(
+            "When a literal filter value, category label, or date format is uncertain, call "
+            "sample_column_values before writing the predicate; never guess stored values."
+        )
+    if os.getenv("BIRD_SQL_REPAIR", "off").lower() in {"1", "on", "true", "yes"}:
+        additions.append(
+            "A failed SQL execution is evidence, not an answer: read its exact SQLite error, fix the "
+            "specific syntax/table/column issue, run the corrected query, then submit only the corrected SQL."
+        )
+    return "\n\n## BENCHMARK CHECKS\n" + "\n".join(f"- {item}" for item in additions) if additions else ""
+
+
 class _NullTraceCtx:
     def to_trace_context(self):
         return None
@@ -282,7 +303,7 @@ You have access to tools to fetch the database schema and execute Python code.
     # query. Mixing them produced 8% EX on BIRD, where the failures were mostly
     # "listed the rows instead of counting them".
     if os.getenv("AGENT_PROMPT", "").lower() == "bird":
-        system_instruction = BIRD_SYSTEM_INSTRUCTION
+        system_instruction = BIRD_SYSTEM_INSTRUCTION + _bird_experiment_instruction()
     else:
         system_instruction = _PRODUCT_SYSTEM_INSTRUCTION
 

@@ -19,7 +19,37 @@ def _schema_preview(schema_json: str, max_chars: int = 12000) -> str:
     return schema_json[:max_chars] + "\n... (truncated — call describe_table for a specific table)"
 
 
-def create_agent_tools(db_uri: str = None, source: DataSource = None) -> tuple:
+def _bird_shape_feedback(question: str, sql: str, columns: list[str], row_count: int) -> str:
+    """Cheap, conservative feedback before a benchmark submission.
+
+    This is intentionally advisory rather than a SQL correctness oracle. It
+    catches the common exact-match failures (a row dump for a count, or extra
+    columns for a scalar) without rejecting valid grouped questions.
+    """
+    q = question.lower()
+    normal_sql = re.sub(r"\s+", " ", sql.lower())
+    grouped = any(token in q for token in ("for each", "by each", "per ", "group by"))
+    scalar_request = not grouped and any(token in q for token in (
+        "how many", "number of", "how much", "what is the ratio", "what is the highest",
+        "what is the lowest", "average ", "total ",
+    ))
+    aggregate = bool(re.search(r"\b(count|sum|avg|min|max)\s*\(|/", normal_sql))
+    warnings: list[str] = []
+    if scalar_request and not aggregate:
+        warnings.append("question appears to request one aggregate value, but SQL has no aggregate")
+    if scalar_request and len(columns) != 1:
+        warnings.append(f"question appears scalar, but query returns {len(columns)} columns")
+    if scalar_request and row_count != 1:
+        warnings.append(f"question appears scalar, but query returns {row_count} rows")
+    if _LOOKS_LIKE_INSPECTION.match(sql or ""):
+        warnings.append("bare table inspection is not an answer")
+    return ("WARN: " + "; ".join(warnings)) if warnings else (
+        f"PASS: observed {row_count} rows and {len(columns)} columns; now submit this exact SQL."
+    )
+
+
+def create_agent_tools(db_uri: str = None, source: DataSource = None,
+                       benchmark_question: str = "") -> tuple:
     """
     Build the agent's tool set for one data source.
 
@@ -247,6 +277,64 @@ def create_agent_tools(db_uri: str = None, source: DataSource = None) -> tuple:
     # exploratory, so "the last query that executed" is often a sanity check; a
     # dedicated tool makes the agent state its final query deliberately.
     if os.getenv("AGENT_PROMPT", "").lower() == "bird":
+        validate_shape = os.getenv("BIRD_VERIFY_SHAPE", "off").lower() in {"1", "on", "true", "yes"}
+        value_grounding = os.getenv("BIRD_VALUE_GROUNDING", "off").lower() in {"1", "on", "true", "yes"}
+
+        if validate_shape:
+            def validate_query_shape(sql: str) -> str:
+                """Execute a proposed answer and report its observed result shape."""
+                try:
+                    df = ds.run(sql, max_rows=1001)
+                except Exception as exc:
+                    return f"FAIL: query cannot be submitted: {type(exc).__name__}: {exc}"
+                setattr(ds, "_bird_validated_sql", sql)
+                return _bird_shape_feedback(benchmark_question, sql, list(df.columns), len(df))
+
+            tools_schema.append({
+                "type": "function",
+                "function": {
+                    "name": "validate_query_shape",
+                    "description": "Required before submit_query in BIRD mode. Executes the proposed final SQL and checks rows/columns against the question's likely answer shape.",
+                    "parameters": {"type": "object", "properties": {
+                        "sql": {"type": "string", "description": "The exact final SQL to validate."}
+                    }, "required": ["sql"]},
+                },
+            })
+            tool_map["validate_query_shape"] = validate_query_shape
+
+        if value_grounding:
+            def sample_column_values(table: str, column: str, limit: int = 20) -> str:
+                """Return distinct non-null values for a known SQLite table column."""
+                try:
+                    schema = __import__("json").loads(ds.schema_json())
+                    entry = schema.get(table)
+                    names = {c.get("name") for c in entry.get("columns", [])} if entry else set()
+                    if not entry or column not in names:
+                        return f"FAIL: {table}.{column} is not in the schema"
+                    quoted_table = '"' + table.replace('"', '""') + '"'
+                    quoted_column = '"' + column.replace('"', '""') + '"'
+                    df = ds.run(
+                        f"SELECT DISTINCT {quoted_column} FROM {quoted_table} "
+                        f"WHERE {quoted_column} IS NOT NULL LIMIT {max(1, min(int(limit), 50))}",
+                        max_rows=50,
+                    )
+                    return f"values for {table}.{column}:\n" + df.to_string(index=False)
+                except Exception as exc:
+                    return f"FAIL: could not sample values: {type(exc).__name__}: {exc}"
+
+            tools_schema.append({
+                "type": "function",
+                "function": {
+                    "name": "sample_column_values",
+                    "description": "Use before a literal WHERE filter when spelling, category labels, or date formats are uncertain. Returns distinct values from a schema-validated SQLite column.",
+                    "parameters": {"type": "object", "properties": {
+                        "table": {"type": "string"}, "column": {"type": "string"},
+                        "limit": {"type": "integer", "description": "Maximum values (1-50; default 20)."},
+                    }, "required": ["table", "column"]},
+                },
+            })
+            tool_map["sample_column_values"] = sample_column_values
+
         def submit_query(sql: str) -> str:
             """Record the final query. The harness executes exactly this one."""
             # An inspection query (SELECT a, b FROM t) is never the answer to a
@@ -256,6 +344,8 @@ def create_agent_tools(db_uri: str = None, source: DataSource = None) -> tuple:
             if _LOOKS_LIKE_INSPECTION.match(sql or ""):
                 return ("rejected: that is an inspection query (a bare column list with no "
                         "filter or aggregate). Submit the query that answers the question.")
+            if validate_shape and getattr(ds, "_bird_validated_sql", None) != sql:
+                return "rejected: call validate_query_shape on this exact final SQL before submitting it."
             setattr(ds, "submitted_sql", sql)
             return ("submitted — this query is what will be scored. "
                     "Do not run further queries unless this one failed.")

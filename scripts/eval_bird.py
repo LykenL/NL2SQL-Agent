@@ -253,7 +253,7 @@ def evaluate_one(row: dict, sql_timeout: float = 12.0) -> dict:
     # The eval bypasses MartSource on purpose: BIRD needs an arbitrary SQLite
     # file, which is exactly what the governed product forbids at runtime.
     ds = SqlDataSource(f"sqlite:///{path}")
-    schema, tool_map = create_agent_tools(source=ds)
+    schema, tool_map = create_agent_tools(source=ds, benchmark_question=build_question(row))
 
     # Schema linking: narrow the schema the agent sees before it writes SQL.
     # A bad shortlist would be worse than none, so the full schema is restored on
