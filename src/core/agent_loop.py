@@ -159,7 +159,18 @@ def run_agent_loop(
     # ── Confirmed business definitions for this question ─────────────────────
     # Enforcement is on by default; SEMANTIC_ENFORCE=off disables both the
     # prompt block and the pre-execution check (used for A/B measurement).
-    enforce = os.getenv("SEMANTIC_ENFORCE", "on").lower() not in ("0", "off", "false")
+    #
+    # Benchmark mode skips it entirely. The registry holds definitions written for
+    # the product's own warehouse ("how many orders" -> COUNT(DISTINCT InvoiceId)),
+    # and its lexical matcher fires on generic phrasing: "How many superheroes are
+    # taller than 200 cm?" resolved to the `orders` metric and appended a warning
+    # that has nothing to do with the database being queried. Harmless, but it is
+    # noise in the prompt and it makes the benchmark measure the wrong thing.
+    benchmark_mode = os.getenv("AGENT_PROMPT", "").lower() == "bird"
+    enforce = (
+        not benchmark_mode
+        and os.getenv("SEMANTIC_ENFORCE", "on").lower() not in ("0", "off", "false")
+    )
     registry = None
     active_metrics: list = []
     if enforce:
