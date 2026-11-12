@@ -77,10 +77,14 @@ BIRD_SYSTEM_INSTRUCTION = """You are a text-to-SQL expert working against a SQLi
 Workflow:
 1. If the schema was not given to you, call get_database_schema first. Never invent
    table or column names — SQLite quoting is strict, and a wrong name fails the query.
-2. Write ONE query that answers the question exactly, and run it with run_query or
-   ds.run(sql). You may run exploratory queries, but the LAST query you run must be
-   the answer.
-3. SHAPE RULE - scored literally, and an extra column is a wrong answer:
+2. Follow evidence strictly: when the question provides external knowledge or evidence,
+   treat it as absolute ground truth for formulas, abbreviations, and table relationships.
+3. SHAPE & PROJECTION RULE - scored literally, and an extra column is a wrong answer:
+   - PROJECTION MINIMALITY: Select ONLY the exact columns explicitly asked for in the question.
+     Never append primary keys, foreign keys, group-by keys, IDs, or contextual columns
+     unless the user specifically asks to see them.
+     Example: "give each school's eligible meal rate" -> SELECT rate FROM ... (DO NOT SELECT school_name, rate)
+     Example: "list the ten players taller than 180 cm with the highest heading accuracy" -> SELECT player_name FROM ... (DO NOT SELECT player_id, heading_accuracy)
    - "how many / how much / what is the ratio / what is the highest" -> ONE row,
      ONE column. `SELECT COUNT(*) FROM ...`, never `SELECT name, COUNT(*) ...`.
    - "which / list / give the names" -> the rows themselves, and only the columns
@@ -93,11 +97,15 @@ Workflow:
      RIGHT: SELECT COUNT(*) FROM schools WHERE County = 'Alameda'
 4. Match aggregate grain: a question about a row, a named item or "the Nth" usually
    wants one row; a question about "which/all/list" wants the rows themselves.
-5. Mind SQLite details: integer division truncates, so cast to REAL before dividing
-   (e.g. CAST(a AS REAL) / b). Filter out NULLs when they would distort an aggregate.
-6. Finish with submit_query(sql=...). That call is the answer: the harness executes
-   exactly that query and compares its result set. Run exploratory queries freely
-   first, but the submitted one must be final and correctly shaped.
+5. Mind SQLite details:
+   - Integer division truncates: always cast to REAL or multiply by 1.0 (e.g. 1.0 * a / NULLIF(b, 0)).
+   - Undirected graph/relationships: when counting pairs of connected items (e.g. molecular bonds, friendships)
+     in symmetric/join tables, use `id1 < id2` to avoid double-counting undirected pairs.
+   - Filter out NULLs when they would distort an aggregate.
+6. MANDATORY SUBMISSION: You MUST conclude by calling submit_query(sql=...). That call is the
+   only way your answer is officially recorded and scored. Even if you verified the answer
+   with python or run_query, you MUST make the final tool call submit_query(sql=...).
+   Never finish your response without calling submit_query.
 7. In your final reply, state the answer in one or two sentences. No charts, no
    stylistic tables — the query result is the answer.
 """
@@ -527,6 +535,19 @@ def _run_agent_turns(user_message, session_id, client, tools_schema, tool_map,
                     submitted = True
                     break
         else:
+            # Model stopped requesting tool calls.
+            # In BIRD mode, if submit_query hasn't been called yet, prompt the model to submit now.
+            if os.getenv("AGENT_PROMPT", "").lower() == "bird" and not submitted and iteration < max_iterations:
+                messages.append({
+                    "role": "user",
+                    "content": (
+                        "ACTION REQUIRED: You have not called `submit_query` yet! In BIRD evaluation, "
+                        "your answer is only scored if submitted via `submit_query(sql=...)` or validated. "
+                        "Do not conclude or provide analysis text. Call validate_query_shape and submit_query "
+                        "with your final SQL now."
+                    ),
+                })
+                continue
             break
         if submitted:
             break
