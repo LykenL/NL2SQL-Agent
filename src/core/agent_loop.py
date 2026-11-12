@@ -399,6 +399,8 @@ def _run_agent_turns(user_message, session_id, client, tools_schema, tool_map,
     # converge in fewer. Configurable so a benchmark run does not silently hit a
     # limit tuned for a different workload.
     max_iterations = int(os.getenv("AGENT_MAX_ITERATIONS", "7"))
+    bird_shape_check = (os.getenv("AGENT_PROMPT", "").lower() == "bird"
+                        and os.getenv("BIRD_VERIFY_SHAPE", "off").lower() in {"1", "on", "true", "yes"})
     iteration = 0
     start_time = time.time()
     
@@ -408,6 +410,15 @@ def _run_agent_turns(user_message, session_id, client, tools_schema, tool_map,
     submitted = False
     while iteration < max_iterations:
         iteration += 1
+        if bird_shape_check and iteration == max_iterations - 2:
+            messages.append({
+                "role": "user",
+                "content": (
+                    "CRITICAL: You have TWO turns left. Form the final SQL now and call "
+                    "validate_query_shape. Use the next turn only to correct any warning and call "
+                    "submit_query with the exact validated SQL."
+                ),
+            })
         if iteration == max_iterations - 1:
             messages.append({
                 "role": "user",
@@ -416,15 +427,10 @@ def _run_agent_turns(user_message, session_id, client, tools_schema, tool_map,
                     "conclusion in clear Markdown tables and bullet points. Do NOT include any code, "
                     "code fences or the script itself — the UI renders it in the Generated Script panel."
                     + (
-                        " Do NOT run any more queries: call submit_query with the best query you "
+                        " If not already validated, call validate_query_shape with the best query; "
+                        "otherwise call submit_query with the best query you "
                         "have. Never submit an inspection query (no bare column list such as "
                         "SELECT id, name FROM t) — the submitted query's result set is the answer."
-                        if os.getenv("AGENT_PROMPT", "").lower() == "bird" else ""
-                    )
-                    + (
-                        " Do NOT run any more queries: call submit_query with the best query you "
-                        "have. Never submit an inspection query (no bare SELECT of id/name columns) "
-                        "— the submitted query's result set is the answer."
                         if os.getenv("AGENT_PROMPT", "").lower() == "bird" else ""
                     )
                 ),

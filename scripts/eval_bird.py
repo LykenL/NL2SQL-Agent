@@ -442,6 +442,12 @@ def main() -> int:
     ap.add_argument("--sql-timeout", type=float, default=12.0)
     ap.add_argument("--schema-linking", action="store_true",
                     help="pick relevant tables/columns with one extra call before SQL")
+    ap.add_argument("--no-shape-verification", action="store_true",
+                    help="disable BIRD's final SQL shape check (enabled by default)")
+    ap.add_argument("--no-value-grounding", action="store_true",
+                    help="disable BIRD's distinct-value lookup tool (enabled by default)")
+    ap.add_argument("--no-sql-repair", action="store_true",
+                    help="disable BIRD's execution-error repair instruction (enabled by default)")
     ap.add_argument("--no-stratify", action="store_true",
                     help="take the first N by question_id instead of sampling per database")
     args = ap.parse_args()
@@ -450,6 +456,15 @@ def main() -> int:
     # them, and reported in the run record so the number is reproducible.
     os.environ.setdefault("AGENT_PROMPT", "bird")
     os.environ.setdefault("AGENT_MAX_ITERATIONS", "12")
+    for env_name, disabled in (
+        ("BIRD_VERIFY_SHAPE", args.no_shape_verification),
+        ("BIRD_VALUE_GROUNDING", args.no_value_grounding),
+        ("BIRD_SQL_REPAIR", args.no_sql_repair),
+    ):
+        if disabled:
+            os.environ[env_name] = "off"
+        else:
+            os.environ.setdefault(env_name, "on")
     if args.schema_linking:
         os.environ["SCHEMA_LINKING"] = "on"
 
@@ -478,6 +493,12 @@ def main() -> int:
     print(f"databases {len(counts)}  {'(stratified)' if not args.no_stratify else '(first N)'}")
     print("  " + ", ".join(f"{db}:{n}" for db, n in counts.most_common()))
     print(f"schema_linking {'on' if args.schema_linking else 'off'}")
+    print("benchmark_guards " + ", ".join(
+        f"{name}={'on' if os.getenv(env, 'off').lower() in {'1', 'on', 'true', 'yes'} else 'off'}"
+        for name, env in (("shape", "BIRD_VERIFY_SHAPE"),
+                          ("values", "BIRD_VALUE_GROUNDING"),
+                          ("repair", "BIRD_SQL_REPAIR"))
+    ))
 
     if args.dry_run:
         for r in rows[:10]:
@@ -545,6 +566,9 @@ def main() -> int:
         "agent_prompt": os.getenv("AGENT_PROMPT"),
         "agent_max_iterations": int(os.getenv("AGENT_MAX_ITERATIONS", "7")),
         "schema_linking": schema_link.enabled(),
+        "bird_verify_shape": os.getenv("BIRD_VERIFY_SHAPE", "off").lower() in {"1", "on", "true", "yes"},
+        "bird_value_grounding": os.getenv("BIRD_VALUE_GROUNDING", "off").lower() in {"1", "on", "true", "yes"},
+        "bird_sql_repair": os.getenv("BIRD_SQL_REPAIR", "off").lower() in {"1", "on", "true", "yes"},
         "limit": args.limit,
         "cohort": args.cohort,
         "cohort_manifest": str(cohort_manifest_path(args.cohort)) if args.cohort else None,
