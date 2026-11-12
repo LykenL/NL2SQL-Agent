@@ -40,7 +40,32 @@ def _bird_shape_feedback(question: str, sql: str, columns: list[str], row_count:
     if scalar_request and len(columns) != 1:
         warnings.append(f"question appears scalar, but query returns {len(columns)} columns")
     if scalar_request and row_count != 1:
-        warnings.append(f"question appears scalar, but query returns {row_count} rows")
+        warnings.append(
+            f"question appears scalar, but query returns {row_count} rows — "
+            "add ORDER BY ... LIMIT 1 if a single best/first/highest answer was asked for, "
+            "or check whether a join duplicated rows"
+        )
+    # Ranking questions: "the Nth", "the highest", "the most". A multi-row result is
+    # the usual failure here (5 rows for a 1-row gold answer), and the fix is almost
+    # always LIMIT or a tighter WHERE — say so instead of only reporting the count.
+    limit_missing = (
+        row_count > 1
+        and re.search(r"\b(the|a) (highest|lowest|largest|smallest|most|fewest|first|last|"
+                      r"youngest|oldest|earliest|latest)\b|\btop \d+\b|\bthe \w+-?(highest|largest|most)\b",
+                      q)
+        and not re.search(r"\blimit\b", normal_sql)
+    )
+    if limit_missing:
+        warnings.append(
+            f"question asks for a single best/first item but the query has no LIMIT "
+            f"(returns {row_count} rows); add ORDER BY the ranking column DESC/ASC LIMIT 1"
+        )
+    # A join that duplicates keys inflates counts. Flag the pattern, not the answer.
+    if row_count > 1 and re.search(r"\bcount\s*\(\s*\*\s*\)", normal_sql) and " join " in normal_sql:
+        warnings.append(
+            "COUNT(*) over a join counts duplicated rows; use COUNT(DISTINCT key) if the "
+            "question asks how many distinct things there are"
+        )
     if _LOOKS_LIKE_INSPECTION.match(sql or ""):
         warnings.append("bare table inspection is not an answer")
     return ("WARN: " + "; ".join(warnings)) if warnings else (

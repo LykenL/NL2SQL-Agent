@@ -461,6 +461,11 @@ def _run_agent_turns(user_message, session_id, client, tools_schema, tool_map,
         _tc = ctx.to_trace_context()
         if _tc is not None:
             _call_kwargs["trace_context"] = _tc
+        # Effort control only applies when thinking is on; DeepSeek ignores it
+        # otherwise, so it is sent only in that case.
+        _effort = tracing.reasoning_effort()
+        if _effort and tracing.agent_thinking_enabled():
+            _call_kwargs["reasoning_effort"] = _effort
         response = client.chat.completions.create(
             model=tracing.llm_model(),
             messages=_mask_messages(messages),

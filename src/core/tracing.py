@@ -129,6 +129,12 @@ def thinking_enabled() -> bool:
     return agent_thinking_enabled()
 
 
+def reasoning_effort() -> Optional[str]:
+    """DeepSeek thinking effort: low / high / max. Empty means the API default."""
+    value = os.getenv("AGENT_THINKING_EFFORT", "").strip().lower()
+    return value if value in {"low", "high", "max"} else None
+
+
 def extra_body(thinking: Optional[bool] = None) -> dict:
     """DeepSeek-only request fields that the OpenAI SDK passes through verbatim."""
     enabled_for_call = agent_thinking_enabled() if thinking is None else thinking
