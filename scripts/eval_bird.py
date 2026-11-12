@@ -448,6 +448,8 @@ def main() -> int:
                     help="disable BIRD's distinct-value lookup tool (enabled by default)")
     ap.add_argument("--no-sql-repair", action="store_true",
                     help="disable BIRD's execution-error repair instruction (enabled by default)")
+    ap.add_argument("--only-ids", nargs="+", type=int, default=None,
+                    help="run exactly these question ids (re-run a known failure set)")
     ap.add_argument("--no-stratify", action="store_true",
                     help="take the first N by question_id instead of sampling per database")
     args = ap.parse_args()
@@ -480,9 +482,19 @@ def main() -> int:
         for cohort, path in paths.items():
             print(f"wrote {cohort}: {path}")
         return 0
-    rows = load_cohort(all_rows, args.cohort) if args.cohort else (
-        stratify_rows(all_rows, args.limit) if not args.no_stratify else all_rows[:args.limit]
-    )
+    if args.only_ids:
+        # Re-running a fixed set of failures is the cheapest useful experiment:
+        # it answers "did this change help?" without paying for questions that
+        # already pass.
+        by_id = {r["id"]: r for r in all_rows}
+        missing = [i for i in args.only_ids if i not in by_id]
+        if missing:
+            ap.error(f"unknown question ids: {missing[:5]}")
+        rows = [by_id[i] for i in args.only_ids]
+    elif args.cohort:
+        rows = load_cohort(all_rows, args.cohort)
+    else:
+        rows = stratify_rows(all_rows, args.limit) if not args.no_stratify else all_rows[:args.limit]
     print(f"model    {llm_model()}  (agent thinking: {'on' if agent_thinking_enabled() else 'off'}; "
           f"linker thinking: {'on' if linker_thinking_enabled() else 'off'})")
     print(f"prompt   {os.getenv('AGENT_PROMPT')}   max_iterations {os.getenv('AGENT_MAX_ITERATIONS')}")
