@@ -1,0 +1,134 @@
+{
+  "run_at": "2026-11-12T18:33:07Z",
+  "benchmark": "BIRD Mini-Dev (sqlite split)",
+  "model": "deepseek-flash",
+  "agent_thinking": true,
+  "linker_thinking": false,
+  "llm_base_url": "https://api.deepseek.com/v1",
+  "agent_prompt": "bird",
+  "agent_max_iterations": 12,
+  "schema_linking": true,
+  "bird_verify_shape": true,
+  "bird_value_grounding": true,
+  "bird_sql_repair": true,
+  "limit": 50,
+  "cohort": null,
+  "cohort_manifest": null,
+  "question_ids": [
+    11,
+    354
+  ],
+  "workers": 2,
+  "commit": "1b2367e",
+  "ex": 1.0,
+  "samples": 2,
+  "per_db": {
+    "california_schools": {
+      "ok": 1,
+      "n": 1
+    },
+    "superhero": {
+      "ok": 1,
+      "n": 1
+    }
+  },
+  "failures": {},
+  "linking": {
+    "used": 2,
+    "fell_back": 0,
+    "average_full_schema_chars": 5455.0,
+    "average_narrowed_schema_chars": 5351.5
+  },
+  "wall_seconds": 34.7,
+  "results": [
+    {
+      "id": 11,
+      "db": "california_schools",
+      "question": "Following up on the SAT participation review: among the currently operating high schools in the district with NCES identification number 0613360 that had no SAT test takers, which one begins serving students at the earliest grade? Please give me each such school's name and grade span served. Note that a high school must actually enroll students through grade 12-offering grade 12 without enrollment doesn't count. A school with no SAT record counts as having zero SAT test takers and should be included; only exclude schools with a positive number of SAT test takers. Compare starting grades as school grades-preschool comes before kindergarten, which comes before grade 1-and use the lowest grade the school actually serves, not just what it offers. If several schools tie at the earliest grade, list them all alphabetically by school name.",
+      "evidence": "NCES identification number 0613360 is the school district identification number assigned by the National Center for Education Statistics.",
+      "sql": "WITH cohort AS (SELECT s.School AS school_name, s.GSserved AS grade_span_served, CASE WHEN SUBSTR(s.GSserved,1,INSTR(s.GSserved||'-','-')-1) = 'P' THEN -1 WHEN SUBSTR(s.GSserved,1,INSTR(s.GSserved||'-','-')-1) = 'K' THEN 0 ELSE CAST(SUBSTR(s.GSserved,1,INSTR(s.GSserved||'-','-')-1) AS INTEGER) END AS start_rank FROM schools s LEFT JOIN satscores t ON s.CDSCode = t.cds WHERE s.NCESDist = '0613360' AND s.StatusType = 'Active' AND s.GSserved LIKE '%12' AND COALESCE(t.NumTstTakr,0) = 0) SELECT school_name, grade_span_served FROM cohort WHERE start_rank = (SELECT MIN(start_rank) FROM cohort) ORDER BY school_name",
+      "difficulty": "challenging",
+      "ok": true,
+      "failure": null,
+      "gold_error": null,
+      "pred_error": null,
+      "gold_n": 1,
+      "pred_n": 1,
+      "iterations": 9,
+      "tool_calls": 11,
+      "seconds": 32.3,
+      "predicted_sql": "WITH hs AS (\n  SELECT s.CDSCode, s.School, s.GSserved,\n         MAX(COALESCE(sa.NumTstTakr,0)) AS takers\n  FROM schools s\n  LEFT JOIN satscores sa ON sa.cds = s.CDSCode\n  WHERE s.NCESDist='0613360' AND s.StatusType='Active'\n    AND s.GSserved LIKE '%12%'\n  GROUP BY s.CDSCode, s.School, s.GSserved\n),\nqual AS (\n  SELECT *,\n    CASE WHEN instr(GSserved,'-')>0 THEN substr(GSserved,1,instr(GSserved,'-')-1)\n         ELSE GSserved END AS start_token\n  FROM hs\n  WHERE takers=0\n),\nranked AS (\n  SELECT *,\n    CASE start_token\n      WHEN 'P' THEN -2 WHEN 'PK' THEN -2 WHEN 'PreK' THEN -2\n      WHEN 'K' THEN -1\n      WHEN '1' THEN 1 WHEN '2' THEN 2 WHEN '3' THEN 3 WHEN '4' THEN 4\n      WHEN '5' THEN 5 WHEN '6' THEN 6 WHEN '7' THEN 7 WHEN '8' THEN 8\n      WHEN '9' THEN 9 WHEN '10' THEN 10 WHEN '11' THEN",
+      "submitted": true,
+      "linked": true,
+      "linked_tables": [
+        "schools",
+        "satscores",
+        "frpm"
+      ],
+      "link_initial_tables": [
+        "schools",
+        "satscores",
+        "frpm"
+      ],
+      "link_added_tables": [],
+      "link_fell_back": false,
+      "link_dropped": [],
+      "full_schema_chars": 6812,
+      "narrowed_schema_chars": 6812,
+      "link_response_chars": 247,
+      "sql_count": 7,
+      "reply_chars": 73
+    },
+    {
+      "id": 354,
+      "db": "superhero",
+      "question": "For my cryokinesis page, I want to know how broad the power portfolios are around ice-powered heroes. Consider all heroes who share at least one superpower with a cryokinesis holder - including the cryokinesis holders themselves, since they share cryokinesis with each other. What is the average number of superpowers these heroes have, rounded to one decimal place? Please send back just that single number.",
+      "evidence": "Cryokinesis is the superpower to generate and control ice.",
+      "sql": "WITH sharers AS (SELECT DISTINCT hp2.hero_id FROM hero_power hp1 JOIN hero_power hp2 ON hp2.power_id = hp1.power_id WHERE hp1.hero_id IN (SELECT hero_id FROM hero_power WHERE power_id = (SELECT id FROM superpower WHERE power_name = 'Cryokinesis'))), counts AS (SELECT hero_id, COUNT(*) AS cnt FROM hero_power WHERE hero_id IN (SELECT hero_id FROM sharers) GROUP BY hero_id) SELECT ROUND(AVG(cnt), 1) AS avg_superpower_count FROM counts",
+      "difficulty": "challenging",
+      "ok": true,
+      "failure": null,
+      "gold_error": null,
+      "pred_error": null,
+      "gold_n": 1,
+      "pred_n": 1,
+      "iterations": 7,
+      "tool_calls": 7,
+      "seconds": 12.7,
+      "predicted_sql": "WITH cryo AS (\n  SELECT hp.hero_id FROM hero_power hp\n  JOIN superpower sp ON sp.id = hp.power_id\n  WHERE sp.power_name = 'Cryokinesis'\n),\nshared_powers AS (\n  SELECT DISTINCT hp.power_id\n  FROM hero_power hp\n  WHERE hp.hero_id IN (SELECT hero_id FROM cryo)\n),\ntarget_heroes AS (\n  SELECT DISTINCT hp.hero_id\n  FROM hero_power hp\n  WHERE hp.power_id IN (SELECT power_id FROM shared_powers)\n),\npower_counts AS (\n  SELECT th.hero_id, COUNT(*) AS n\n  FROM target_heroes th\n  JOIN hero_power hp ON hp.hero_id = th.hero_id\n  GROUP BY th.hero_id\n)\nSELECT ROUND(AVG(n),1) AS avg_powers FROM power_counts",
+      "submitted": true,
+      "linked": true,
+      "linked_tables": [
+        "superhero",
+        "superpower",
+        "hero_power",
+        "alignment",
+        "colour",
+        "gender",
+        "hero_attribute",
+        "publisher",
+        "race"
+      ],
+      "link_initial_tables": [
+        "superhero",
+        "superpower",
+        "hero_power"
+      ],
+      "link_added_tables": [
+        "alignment",
+        "colour",
+        "gender",
+        "hero_attribute",
+        "publisher",
+        "race"
+      ],
+      "link_fell_back": false,
+      "link_dropped": [],
+      "full_schema_chars": 4098,
+      "narrowed_schema_chars": 3891,
+      "link_response_chars": 162,
+      "sql_count": 5,
+      "reply_chars": 73
+    }
+  ]
+}

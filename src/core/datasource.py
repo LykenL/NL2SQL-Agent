@@ -94,7 +94,38 @@ class SqlDataSource(DataSource):
 
             connect_args = {"connect_timeout": 10} if self.dialect in ("postgres", "postgresql", "mysql") else {}
             self._engine = create_engine(self.uri, connect_args=connect_args)
+            if self.dialect == "sqlite":
+                self._register_sqlite_functions(self._engine)
         return self._engine
+
+    @staticmethod
+    def _register_sqlite_functions(engine) -> None:
+        """Give SQLite the functions its dialect is missing but queries assume.
+
+        SQLite ships without REGEXP, so `WHERE x REGEXP '\\bindia\\b'` fails with
+        "no such function: REGEXP" — one benchmark question died that way. The
+        operator exists in the grammar and resolves to a user-defined `regexp`
+        function, so registering one is enough. This is an engine capability gap,
+        not a question the model got wrong, so it is fixed here rather than by
+        telling the model to avoid the syntax.
+        """
+        import re as _re
+        from sqlalchemy import event
+
+        def _regexp(pattern, value):
+            if value is None or pattern is None:
+                return None
+            try:
+                return 1 if _re.search(pattern, str(value), _re.IGNORECASE) else 0
+            except _re.error:
+                return 0
+
+        @event.listens_for(engine, "connect")
+        def _on_connect(dbapi_connection, _record):
+            try:
+                dbapi_connection.create_function("regexp", 2, _regexp)
+            except Exception:
+                pass
 
     def schema_json(self) -> str:
         from src.core.db_reader import extract_db_schema

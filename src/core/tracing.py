@@ -130,9 +130,20 @@ def thinking_enabled() -> bool:
 
 
 def reasoning_effort() -> Optional[str]:
-    """DeepSeek thinking effort: low / high / max. Empty means the API default."""
+    """DeepSeek thinking effort. Empty means the API default (high).
+
+    Only low / high / max exist. Per the API's own mapping table, minimal maps to low,
+    medium to high, xhigh to high, ultra to max — so "medium" is not a middle tier,
+    it is a synonym for high. Accepted here so asking for it does what it says rather
+    than silently falling back.
+    """
     value = os.getenv("AGENT_THINKING_EFFORT", "").strip().lower()
-    return value if value in {"low", "high", "max"} else None
+    mapped = {
+        "minimal": "low", "low": "low",
+        "medium": "high", "high": "high", "xhigh": "high",
+        "max": "max", "ultra": "max",
+    }.get(value)
+    return mapped
 
 
 def extra_body(thinking: Optional[bool] = None) -> dict:

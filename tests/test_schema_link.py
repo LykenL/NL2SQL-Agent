@@ -275,6 +275,11 @@ def test_bird_optional_guard_tools_require_validated_submission(monkeypatch):
     assert "validate_query_shape" in tool_map
     assert "sample_column_values" in tool_map
     sql = "SELECT COUNT(*) FROM schools WHERE County = 'Alameda'"
-    assert "validate_query_shape" in tool_map["submit_query"](sql)
+    # A submission whose SQL was not validated first is now validated on the spot and
+    # recorded, instead of being refused. Refusing it lost the answer entirely: six of
+    # fifty blind questions ended unsubmitted because the string had been reformatted
+    # between validate and submit, and those questions scored on the wrong statement.
+    first = tool_map["submit_query"](sql)
+    assert first.startswith("submitted") or first.startswith("recorded as submitted")
     assert tool_map["validate_query_shape"](sql).startswith("PASS:")
     assert tool_map["submit_query"](sql).startswith("submitted")

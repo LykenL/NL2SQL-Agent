@@ -1,0 +1,231 @@
+{
+  "run_at": "2026-11-12T18:32:22Z",
+  "benchmark": "BIRD Mini-Dev (sqlite split)",
+  "model": "deepseek-flash",
+  "agent_thinking": true,
+  "linker_thinking": false,
+  "llm_base_url": "https://api.deepseek.com/v1",
+  "agent_prompt": "bird",
+  "agent_max_iterations": 12,
+  "schema_linking": true,
+  "bird_verify_shape": true,
+  "bird_value_grounding": true,
+  "bird_sql_repair": true,
+  "limit": 50,
+  "cohort": null,
+  "cohort_manifest": null,
+  "question_ids": [
+    87,
+    175,
+    286,
+    297
+  ],
+  "workers": 4,
+  "commit": "1b2367e",
+  "ex": 1.0,
+  "samples": 4,
+  "per_db": {
+    "card_games": {
+      "ok": 1,
+      "n": 1
+    },
+    "european_football_2": {
+      "ok": 1,
+      "n": 1
+    },
+    "formula_1": {
+      "ok": 1,
+      "n": 1
+    },
+    "student_club": {
+      "ok": 1,
+      "n": 1
+    }
+  },
+  "failures": {},
+  "linking": {
+    "used": 4,
+    "fell_back": 0,
+    "average_full_schema_chars": 10559.2,
+    "average_narrowed_schema_chars": 8396.5
+  },
+  "wall_seconds": 24.8,
+  "results": [
+    {
+      "id": 87,
+      "db": "card_games",
+      "question": "I'm compiling the official rulings archive for the Magic: The Gathering card Fireball. How many official rulings have ever been issued for Fireball? I need the total across all time, with no date restriction.",
+      "evidence": "A ruling is an official clarification issued by Wizards of the Coast about how a card works.",
+      "sql": "SELECT COUNT(*) AS ruling_count FROM (SELECT DISTINCT r.date, r.text FROM rulings AS r INNER JOIN cards AS c ON r.uuid = c.uuid WHERE c.name = 'Fireball')",
+      "difficulty": "challenging",
+      "ok": true,
+      "failure": null,
+      "gold_error": null,
+      "pred_error": null,
+      "gold_n": 1,
+      "pred_n": 1,
+      "iterations": 6,
+      "tool_calls": 7,
+      "seconds": 11.7,
+      "predicted_sql": "SELECT COUNT(DISTINCT r.text) AS number_of_rulings FROM rulings r JOIN cards c ON r.uuid = c.uuid WHERE c.name = 'Fireball'",
+      "submitted": true,
+      "linked": true,
+      "linked_tables": [
+        "cards",
+        "rulings",
+        "foreign_data",
+        "legalities"
+      ],
+      "link_initial_tables": [
+        "cards",
+        "rulings"
+      ],
+      "link_added_tables": [
+        "foreign_data",
+        "legalities"
+      ],
+      "link_fell_back": false,
+      "link_dropped": [],
+      "full_schema_chars": 8897,
+      "narrowed_schema_chars": 6892,
+      "link_response_chars": 109,
+      "sql_count": 5,
+      "reply_chars": 73
+    },
+    {
+      "id": 175,
+      "db": "european_football_2",
+      "question": "What is the average height in centimeters of players whose current defensive work rate grade is not medium? Use each player's most recent rating record to determine their current grade, and round the result to two decimal places. I just need that single number.",
+      "evidence": "Defensive work rate grades run low, medium and high.",
+      "sql": "WITH latest AS (SELECT player_api_id, defensive_work_rate, ROW_NUMBER() OVER (PARTITION BY player_api_id ORDER BY date DESC, id DESC) AS rn FROM Player_Attributes) SELECT ROUND(AVG(p.height), 2) AS average_height FROM latest l JOIN Player p ON p.player_api_id = l.player_api_id WHERE l.rn = 1 AND l.defensive_work_rate IN ('low', 'high')",
+      "difficulty": "challenging",
+      "ok": true,
+      "failure": null,
+      "gold_error": null,
+      "pred_error": null,
+      "gold_n": 1,
+      "pred_n": 1,
+      "iterations": 6,
+      "tool_calls": 7,
+      "seconds": 11.4,
+      "predicted_sql": "WITH latest AS (\n  SELECT player_api_id, defensive_work_rate,\n         ROW_NUMBER() OVER (PARTITION BY player_api_id ORDER BY date DESC, id DESC) AS rn\n  FROM Player_Attributes\n)\nSELECT ROUND(AVG(p.height), 2) AS avg_height_cm\nFROM latest l\nJOIN Player p ON p.player_api_id = l.player_api_id\nWHERE l.rn = 1\n  AND l.defensive_work_rate IN ('low','high')",
+      "submitted": true,
+      "linked": true,
+      "linked_tables": [
+        "Player",
+        "Player_Attributes",
+        "Match"
+      ],
+      "link_initial_tables": [
+        "Player",
+        "Player_Attributes"
+      ],
+      "link_added_tables": [
+        "Match"
+      ],
+      "link_fell_back": false,
+      "link_dropped": [],
+      "full_schema_chars": 18909,
+      "narrowed_schema_chars": 15549,
+      "link_response_chars": 166,
+      "sql_count": 6,
+      "reply_chars": 73
+    },
+    {
+      "id": 286,
+      "db": "formula_1",
+      "question": "Which Chinese Grand Prix edition from the 2000s (2000–2009 seasons) had the earliest scheduled local start time? Give me the season year of that edition and the runner-up's time gap to the winner (the runner-up being the driver classified second at the finish). If several editions share the earliest scheduled local start time, use the most recent one.",
+      "evidence": "Scheduled local start time: the time of day the race was scheduled to start, local to the circuit.",
+      "sql": "SELECT r.year, res.time AS runner_up_gap FROM races r JOIN results res ON res.raceId = r.raceId WHERE r.name = 'Chinese Grand Prix' AND r.year BETWEEN 2000 AND 2009 AND res.positionOrder = 2 AND r.time IS NOT NULL AND r.time = (SELECT MIN(r2.time) FROM races r2 WHERE r2.name = 'Chinese Grand Prix' AND r2.year BETWEEN 2000 AND 2009 AND r2.time IS NOT NULL) ORDER BY r.year DESC LIMIT 1",
+      "difficulty": "challenging",
+      "ok": true,
+      "failure": null,
+      "gold_error": null,
+      "pred_error": null,
+      "gold_n": 1,
+      "pred_n": 1,
+      "iterations": 6,
+      "tool_calls": 6,
+      "seconds": 22.2,
+      "predicted_sql": "WITH cgp AS (\n  SELECT raceId, year, time\n  FROM races\n  WHERE name LIKE '%Chinese Grand Prix%' AND year BETWEEN 2000 AND 2009 AND time IS NOT NULL\n),\nearliest AS (\n  SELECT year, time FROM cgp\n  ORDER BY time ASC, year DESC\n  LIMIT 1\n)\nSELECT e.year AS season_year,\n       r2.time AS runner_up_gap\nFROM earliest e\nJOIN cgp c ON c.year = e.year\nJOIN results r2 ON r2.raceId = c.raceId AND r2.positionOrder = 2",
+      "submitted": true,
+      "linked": true,
+      "linked_tables": [
+        "races",
+        "circuits",
+        "results",
+        "drivers",
+        "constructorResults",
+        "constructorStandings",
+        "constructors",
+        "driverStandings",
+        "lapTimes",
+        "pitStops",
+        "qualifying",
+        "seasons",
+        "status"
+      ],
+      "link_initial_tables": [
+        "races",
+        "circuits",
+        "results",
+        "drivers"
+      ],
+      "link_added_tables": [
+        "constructorResults",
+        "constructorStandings",
+        "constructors",
+        "driverStandings",
+        "lapTimes",
+        "pitStops",
+        "qualifying",
+        "seasons",
+        "status"
+      ],
+      "link_fell_back": false,
+      "link_dropped": [],
+      "full_schema_chars": 9622,
+      "narrowed_schema_chars": 9622,
+      "link_response_chars": 328,
+      "sql_count": 4,
+      "reply_chars": 73
+    },
+    {
+      "id": 297,
+      "db": "student_club",
+      "question": "What note was recorded for the fundraising proceeds received on September 14, 2019?",
+      "evidence": "",
+      "sql": "SELECT notes FROM income WHERE source = 'Fundraising' AND date_received = '2019-09-14'",
+      "difficulty": "simple",
+      "ok": true,
+      "failure": null,
+      "gold_error": null,
+      "pred_error": null,
+      "gold_n": 1,
+      "pred_n": 1,
+      "iterations": 5,
+      "tool_calls": 4,
+      "seconds": 5.4,
+      "predicted_sql": "SELECT notes FROM income WHERE date_received = '2019-09-14' AND source = 'Fundraising'",
+      "submitted": true,
+      "linked": true,
+      "linked_tables": [
+        "income",
+        "member"
+      ],
+      "link_initial_tables": [
+        "income"
+      ],
+      "link_added_tables": [
+        "member"
+      ],
+      "link_fell_back": false,
+      "link_dropped": [],
+      "full_schema_chars": 4809,
+      "narrowed_schema_chars": 1523,
+      "link_response_chars": 83,
+      "sql_count": 2,
+      "reply_chars": 73
+    }
+  ]
+}

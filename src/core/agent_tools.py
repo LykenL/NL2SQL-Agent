@@ -369,8 +369,28 @@ def create_agent_tools(db_uri: str = None, source: DataSource = None,
             if _LOOKS_LIKE_INSPECTION.match(sql or ""):
                 return ("rejected: that is an inspection query (a bare column list with no "
                         "filter or aggregate). Submit the query that answers the question.")
-            if validate_shape and getattr(ds, "_bird_validated_sql", None) != sql:
-                return "rejected: call validate_query_shape on this exact final SQL before submitting it."
+            # The gate used to be string equality against the SQL that was last
+            # validated, so one extra space or newline rejected the submission and
+            # the question ended up scored on whatever exploration query it ran last
+            # (six of fifty questions finished unsubmitted for exactly that reason).
+            # Compare loosely, and if it genuinely was not validated, validate it now
+            # instead of refusing: the point is to surface the shape, not to gatekeep.
+            def _norm(s) -> str:
+                return " ".join((s or "").split()).rstrip(";").strip().lower()
+
+            if validate_shape and _norm(getattr(ds, "_bird_validated_sql", None)) != _norm(sql):
+                feedback = validate_query_shape(sql)
+                if feedback.startswith("FAIL"):
+                    return "rejected: " + feedback
+                setattr(ds, "submitted_sql", sql)
+                if feedback.startswith("WARN"):
+                    # Recorded, but the shape looks wrong: say both things, so the
+                    # answer is never lost and the model can still revise.
+                    return ("recorded as submitted — but the shape looks off: "
+                            + feedback.replace("WARN: ", "")
+                            + " Call submit_query again with a corrected query if that is wrong.")
+                return ("submitted — this query is what will be scored. Shape check: "
+                        + feedback.replace("PASS: ", ""))
             setattr(ds, "submitted_sql", sql)
             return ("submitted — this query is what will be scored. "
                     "Do not run further queries unless this one failed.")
