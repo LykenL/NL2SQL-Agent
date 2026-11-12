@@ -18,3 +18,7 @@ pinecone
 sse-starlette
 langfuse>=5,<6  # tracing; optional at runtime — no keys means a no-op. v5 filters
                 # HTTP/database spans by default, so BigQuery client spans stay out
+brotlicffi      # httpx2's Brotli decoder passes output_buffer_limit= to process();
+                # the `Brotli` package rejects it (TypeError on every brotli-
+                # compressed response), and httpx only falls back to brotlicffi
+                # when `brotli` is absent.

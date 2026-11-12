@@ -390,7 +390,23 @@ def _run_agent_turns(user_message, session_id, client, tools_schema, tool_map,
         if iteration == max_iterations - 1:
             messages.append({
                 "role": "user",
-                "content": "CRITICAL: You have ONE turn left. Summarize your factual data findings and conclusion in clear Markdown tables and bullet points. Do NOT include any code, code fences or the script itself — the UI renders it in the Generated Script panel."
+                "content": (
+                    "CRITICAL: You have ONE turn left. Summarize your factual data findings and "
+                    "conclusion in clear Markdown tables and bullet points. Do NOT include any code, "
+                    "code fences or the script itself — the UI renders it in the Generated Script panel."
+                    + (
+                        " Do NOT run any more queries: call submit_query with the best query you "
+                        "have. Never submit an inspection query (no bare column list such as "
+                        "SELECT id, name FROM t) — the submitted query's result set is the answer."
+                        if os.getenv("AGENT_PROMPT", "").lower() == "bird" else ""
+                    )
+                    + (
+                        " Do NOT run any more queries: call submit_query with the best query you "
+                        "have. Never submit an inspection query (no bare SELECT of id/name columns) "
+                        "— the submitted query's result set is the answer."
+                        if os.getenv("AGENT_PROMPT", "").lower() == "bird" else ""
+                    )
+                ),
             })
             
         # `name` is understood only by the Langfuse OpenAI wrapper; a plain client

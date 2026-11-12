@@ -43,7 +43,16 @@ DB_ROOT = BIRD_ROOT / "minidev" / "MINIDEV" / "dev_databases"
 
 
 # ── data ---------------------------------------------------------------------
-def load_questions(limit: int = 0, db_id: str = "") -> list[dict]:
+def load_questions(limit: int = 0, db_id: str = "", stratify: bool = True) -> list[dict]:
+    """Questions in question_id order, or proportional to each database.
+
+    Sorting by id and taking the first N is not a sample: Mini-Dev's ids are
+    grouped by database, so the first 50 questions are 49 questions about
+    california_schools. Proportional allocation spreads the sample across all 11
+    databases, which is what makes a failure breakdown meaningful.
+    """
+    from collections import defaultdict
+
     from datasets import load_dataset
 
     ds = load_dataset("birdsql/bird_mini_dev", split="mini_dev_sqlite")
@@ -55,7 +64,43 @@ def load_questions(limit: int = 0, db_id: str = "") -> list[dict]:
     )
     if db_id:
         rows = [r for r in rows if r["db"] == db_id]
-    return rows[:limit] if limit else rows
+    if not limit or not stratify:
+        return rows[:limit] if limit else rows
+
+    return stratify_rows(rows, limit)
+
+
+def stratify_rows(rows: list[dict], limit: int) -> list[dict]:
+    """Proportional pick per database, evenly spaced inside each one."""
+    from collections import defaultdict
+
+    by_db: dict[str, list[dict]] = defaultdict(list)
+    for r in rows:
+        by_db[r["db"]].append(r)
+
+    total = len(rows)
+    # Largest-remainder allocation: every database that exists in the sample is
+    # represented at least once, and the rest are proportional.
+    quotas = {db: max(1, round(len(items) * limit / total)) for db, items in by_db.items()}
+    while sum(quotas.values()) > limit:
+        biggest = max(quotas, key=lambda d: quotas[d] - len(by_db[d]) * limit / total)
+        if quotas[biggest] <= 1:
+            break
+        quotas[biggest] -= 1
+    while sum(quotas.values()) < limit:
+        remain = [d for d in by_db if quotas[d] < len(by_db[d])]
+        if not remain:
+            break
+        quotas[max(remain, key=lambda d: len(by_db[d]))] += 1
+
+    picked: list[dict] = []
+    for db, items in by_db.items():
+        # Evenly spaced picks inside a database, so one library is not dominated
+        # by its first few easy questions.
+        q = quotas[db]
+        step = max(1, len(items) // q)
+        picked.extend(items[::step][:q])
+    return sorted(picked, key=lambda r: r["id"])[:limit]
 
 
 def db_path(db_id: str) -> str:
@@ -132,7 +177,7 @@ def build_question(row: dict) -> str:
 
 # ── one question -------------------------------------------------------------
 def evaluate_one(row: dict, sql_timeout: float = 12.0) -> dict:
-    from src.core import tracing
+    from src.core import schema_link, tracing
     from src.core.agent_loop import run_agent_loop
     from src.core.agent_tools import create_agent_tools
     from src.core.datasource import SqlDataSource
@@ -144,6 +189,31 @@ def evaluate_one(row: dict, sql_timeout: float = 12.0) -> dict:
     # file, which is exactly what the governed product forbids at runtime.
     ds = SqlDataSource(f"sqlite:///{path}")
     schema, tool_map = create_agent_tools(source=ds)
+
+    # Schema linking: narrow the schema the agent sees before it writes SQL.
+    # A bad shortlist would be worse than none, so the full schema is restored on
+    # any lookup failure and the run record says whether it was used.
+    link_info = {"used": False, "tables": [], "fell_back": False, "dropped_tables": []}
+    if schema_link.enabled():
+        question_text = build_question(row)
+        full = ds.schema_json()
+        links = schema_link.select_links(full, question_text)
+        check = schema_link.verify_links(full, links) if links else {"ok": False, "tables": [], "dropped": []}
+        if check["ok"]:
+            # A hallucinated table name is dropped, not fatal: the rest of the
+            # shortlist is usually right.
+            links = {"tables": check["tables"],
+                     "columns": {t: c for t, c in (links.get("columns") or {}).items()
+                                 if t in check["tables"]}}
+            narrowed = schema_link.apply_links(full, links)
+            if narrowed != full:
+                for name, fn in list(tool_map.items()):
+                    if name == "get_database_schema":
+                        tool_map[name] = _fixed_schema(narrowed, fn)
+                link_info.update(used=True, tables=links["tables"],
+                                 dropped_tables=check["dropped"])
+        else:
+            link_info["fell_back"] = True
 
     used: list[str] = []
     for name, fn in list(tool_map.items()):
@@ -201,9 +271,26 @@ def evaluate_one(row: dict, sql_timeout: float = 12.0) -> dict:
         "seconds": round(seconds, 1),
         "predicted_sql": (predicted or "")[:800],
         "submitted": bool(submitted),
+        "linked": link_info["used"],
+        "linked_tables": link_info["tables"],
+        "link_fell_back": link_info["fell_back"],
+        "link_dropped": link_info.get("dropped_tables", []),
         "sql_count": len(ds.executed_sql),
         "reply_chars": len(reply or ""),
     }
+
+
+def _fixed_schema(narrowed: str, original):
+    """Serve the linked schema, but let force_refresh fall back to the full one.
+
+    The agent may decide the shortlist is wrong and ask again; that request must
+    reach the real tool rather than silently returning the same subset.
+    """
+    def tool(force_refresh: bool = False):
+        if force_refresh:
+            return original(force_refresh=True)
+        return narrowed
+    return tool
 
 
 def extract_sql(script: str) -> str:
@@ -244,20 +331,30 @@ def main() -> int:
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--out", default="")
     ap.add_argument("--sql-timeout", type=float, default=12.0)
+    ap.add_argument("--schema-linking", action="store_true",
+                    help="pick relevant tables/columns with one extra call before SQL")
+    ap.add_argument("--no-stratify", action="store_true",
+                    help="take the first N by question_id instead of sampling per database")
     args = ap.parse_args()
 
     # Benchmark mode: minimal prompt, more iterations. Set before the loop reads
     # them, and reported in the run record so the number is reproducible.
     os.environ.setdefault("AGENT_PROMPT", "bird")
     os.environ.setdefault("AGENT_MAX_ITERATIONS", "12")
+    if args.schema_linking:
+        os.environ["SCHEMA_LINKING"] = "on"
 
     from src.core.tracing import llm_model, thinking_enabled
 
-    rows = load_questions(args.limit, args.db)
+    rows = load_questions(args.limit, args.db, stratify=not args.no_stratify)
     print(f"model    {llm_model()}  (thinking: {'on' if thinking_enabled() else 'off'})")
     print(f"prompt   {os.getenv('AGENT_PROMPT')}   max_iterations {os.getenv('AGENT_MAX_ITERATIONS')}")
     print(f"questions {len(rows)}  workers {args.workers}")
-    print(f"databases {len({r['db'] for r in rows})}")
+    from collections import Counter
+    counts = Counter(r["db"] for r in rows)
+    print(f"databases {len(counts)}  {'(stratified)' if not args.no_stratify else '(first N)'}")
+    print("  " + ", ".join(f"{db}:{n}" for db, n in counts.most_common()))
+    print(f"schema_linking {'on' if args.schema_linking else 'off'}")
 
     if args.dry_run:
         for r in rows[:10]:

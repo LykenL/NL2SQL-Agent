@@ -1,7 +1,15 @@
 import os
+import re
 
 from src.core.datasource import DataSource, SqlDataSource
 from src.core.executor import safe_execute
+
+
+# SELECT col[, col...] FROM table — no WHERE, no aggregate, no arithmetic.
+_LOOKS_LIKE_INSPECTION = re.compile(
+    r"^\s*select\s+(\*|[\w.\"]+(\s*,\s*[\w.\"]+)*)\s+from\s+[\w.\"]+\s*;?\s*$",
+    re.IGNORECASE,
+)
 
 
 def _schema_preview(schema_json: str, max_chars: int = 12000) -> str:
@@ -241,6 +249,13 @@ def create_agent_tools(db_uri: str = None, source: DataSource = None) -> tuple:
     if os.getenv("AGENT_PROMPT", "").lower() == "bird":
         def submit_query(sql: str) -> str:
             """Record the final query. The harness executes exactly this one."""
+            # An inspection query (SELECT a, b FROM t) is never the answer to a
+            # benchmark question, but it is what an agent submits when it runs out
+            # of turns. Rejecting it costs one turn and is far cheaper than scoring
+            # a wholesale dump of the table.
+            if _LOOKS_LIKE_INSPECTION.match(sql or ""):
+                return ("rejected: that is an inspection query (a bare column list with no "
+                        "filter or aggregate). Submit the query that answers the question.")
             setattr(ds, "submitted_sql", sql)
             return ("submitted — this query is what will be scored. "
                     "Do not run further queries unless this one failed.")
