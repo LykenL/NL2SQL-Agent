@@ -65,6 +65,86 @@ def _tool_input(name: str, args: dict) -> dict:
             for k, v in list(args.items())[:6]}
 
 
+# Tool output goes straight back into the conversation, so an unclipped result is
+# re-sent on every later turn: one 5,000-row query costs that many tokens times the
+# number of remaining iterations. A blind run died at 1.88M tokens of request
+# context, more than double DeepSeek's 1,048,576 limit, purely from this.
+_MAX_TOOL_CONTENT = 6000        # chars kept from any single tool result
+_MAX_CONTEXT_CHARS = 240_000    # rough budget for everything but the system turn
+
+
+def _clip_tool_content(text: str, limit: int = _MAX_TOOL_CONTENT) -> str:
+    """Keep a tool result's head and tail; the middle of a table is rarely the point."""
+    if len(text) <= limit:
+        return text
+    head = int(limit * 0.6)
+    tail = limit - head
+    omitted = len(text) - limit
+    return (
+        text[:head]
+        + f"\n... [{omitted} chars omitted — the result was clipped to fit the context] ...\n"
+        + text[-tail:]
+    )
+
+
+def _trim_history(messages: list, budget: int = _MAX_CONTEXT_CHARS) -> None:
+    """Drop the oldest tool exchanges once the conversation outgrows its budget.
+
+    Only tool results are elided: the user's question, the assistant's tool calls and
+    the newest exchanges are what the answer depends on. Old results are replaced by
+    a stub rather than deleted, because a tool message whose tool_call_id has no
+    matching call is rejected by the API.
+    """
+    if sum(len(str(m.get("content") or "")) for m in messages) <= budget:
+        return
+    # position 0 is the system turn; keep the newest half and elide the rest
+    elidable = [i for i, m in enumerate(messages) if i > 0 and m.get("role") == "tool"]
+    keep_from = len(elidable) // 2
+    for i in elidable[:keep_from]:
+        m = messages[i]
+        content = str(m.get("content") or "")
+        if content.startswith("[earlier result elided"):
+            continue
+        m["content"] = (
+            f"[earlier result elided to stay within the context budget — "
+            f"it was {len(content)} chars. Re-run the query if you still need it.]"
+        )
+
+
+def _coerce_tool_args(fn, args: dict) -> dict:
+    """Fit the model's arguments onto what `fn` actually accepts.
+
+    The model normally follows the tool schema, but not reliably: one blind run died
+    with `execute_python_code() got an unexpected keyword argument 'code'` because the
+    model invented `code` for a tool whose parameter is named `code_string`. A single
+    wrong key should cost one tool call, not the whole question.
+    """
+    import inspect
+
+    try:
+        params = inspect.signature(fn).parameters
+    except (TypeError, ValueError):
+        return args
+    if any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()):
+        return args
+
+    accepted = set(params)
+    fitted = {k: v for k, v in args.items() if k in accepted}
+    # common aliases the model reaches for
+    aliases = {
+        "code": "code_string",
+        "code_str": "code_string",
+        "python": "code_string",
+        "query": "sql",
+        "sql_query": "sql",
+    }
+    for given, value in args.items():
+        target = aliases.get(given)
+        if target and target in accepted and target not in fitted:
+            fitted[target] = value
+    return fitted
+
+
 def _tool_output(res) -> dict:
     text = str(res)
     return {"output": text[:2000], "chars": len(text)}
@@ -466,6 +546,7 @@ def _run_agent_turns(user_message, session_id, client, tools_schema, tool_map,
         _effort = tracing.reasoning_effort()
         if _effort and tracing.agent_thinking_enabled():
             _call_kwargs["reasoning_effort"] = _effort
+        _trim_history(messages)
         response = client.chat.completions.create(
             model=tracing.llm_model(),
             messages=_mask_messages(messages),
@@ -525,9 +606,10 @@ def _run_agent_turns(user_message, session_id, client, tools_schema, tool_map,
                             continue
 
                 if fname in tool_map:
+                    _fn = tool_map[fname]
                     with tracing.span(fname, as_type="tool", input=_tool_input(fname, fargs),
                                       context=ctx) as _tool:
-                        res = tool_map[fname](**fargs)
+                        res = _fn(**_coerce_tool_args(_fn, fargs))
                         # update(output=...) would overwrite the metadata the span
                         # was created with, so iteration and the call id go into
                         # the output payload instead.
@@ -544,7 +626,8 @@ def _run_agent_turns(user_message, session_id, client, tools_schema, tool_map,
                 else:
                     res = "Tool not found"
                 tool_results_history.append(str(res))
-                messages.append({"role": "tool", "tool_call_id": t.id, "name": fname, "content": str(res)})
+                messages.append({"role": "tool", "tool_call_id": t.id, "name": fname,
+                                 "content": _clip_tool_content(str(res))})
                 if fname == "submit_query":
                     # The submission is the answer; further exploration would only
                     # add cost and could replace the scored query.

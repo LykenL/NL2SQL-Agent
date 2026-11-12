@@ -1,0 +1,145 @@
+{
+  "run_at": "2026-11-12T17:52:08Z",
+  "benchmark": "BIRD Mini-Dev (sqlite split)",
+  "model": "deepseek-flash",
+  "agent_thinking": true,
+  "linker_thinking": false,
+  "llm_base_url": "https://api.deepseek.com/v1",
+  "agent_prompt": "bird",
+  "agent_max_iterations": 12,
+  "schema_linking": true,
+  "bird_verify_shape": true,
+  "bird_value_grounding": true,
+  "bird_sql_repair": true,
+  "limit": 50,
+  "cohort": null,
+  "cohort_manifest": null,
+  "question_ids": [
+    259,
+    404
+  ],
+  "workers": 2,
+  "commit": "fd50625",
+  "ex": 0.0,
+  "samples": 2,
+  "per_db": {
+    "formula_1": {
+      "ok": 0,
+      "n": 1
+    },
+    "thrombosis_prediction": {
+      "ok": 0,
+      "n": 1
+    }
+  },
+  "failures": {
+    "wrong_result": 2
+  },
+  "linking": {
+    "used": 2,
+    "fell_back": 0,
+    "average_full_schema_chars": 7121.5,
+    "average_narrowed_schema_chars": 7121.5
+  },
+  "wall_seconds": 61.0,
+  "results": [
+    {
+      "id": 259,
+      "db": "formula_1",
+      "question": "Who won the 2017 Azerbaijan Grand Prix? I'd like the winner's forename and surname, the local clock time (hours:minutes:seconds.milliseconds) at the circuit at which he crossed the finish line, and the url of his information page, so I can compare the moment the race ended with the TV coverage.",
+      "evidence": "A driver's race time is the duration from the start of the race to the moment he crosses the finish line.",
+      "sql": "SELECT d.forename, d.surname, time(r.time, '0' || res.time) || '.' || substr(res.time, -3) AS finish_time, d.url FROM races r JOIN results res ON res.raceId = r.raceId JOIN drivers d ON d.driverId = res.driverId WHERE r.year = 2017 AND r.name = 'Azerbaijan Grand Prix' AND res.positionOrder = 1",
+      "difficulty": "challenging",
+      "ok": false,
+      "failure": "wrong_result",
+      "gold_error": null,
+      "pred_error": null,
+      "gold_n": 1,
+      "pred_n": 1,
+      "iterations": 5,
+      "tool_calls": 5,
+      "seconds": 8.9,
+      "predicted_sql": "SELECT r.raceId, r.year, r.name AS race, r.date, r.time AS start_time, r.url AS race_url,\n       c.name AS circuit, c.location, c.country,\n       d.forename, d.surname, d.url AS driver_url,\n       res.time AS race_time, res.milliseconds, res.positionOrder\nFROM races r\nJOIN circuits c ON c.circuitId = r.circuitId\nJOIN results res ON res.raceId = r.raceId\nJOIN drivers d ON d.driverId = res.driverId\nWHERE r.year = 2017 AND r.name LIKE '%Azerbaijan%' AND res.positionOrder = 1;",
+      "submitted": false,
+      "linked": true,
+      "linked_tables": [
+        "races",
+        "results",
+        "drivers",
+        "circuits",
+        "constructorResults",
+        "constructorStandings",
+        "constructors",
+        "driverStandings",
+        "lapTimes",
+        "pitStops",
+        "qualifying",
+        "seasons",
+        "status"
+      ],
+      "link_initial_tables": [
+        "races",
+        "results",
+        "drivers",
+        "circuits"
+      ],
+      "link_added_tables": [
+        "constructorResults",
+        "constructorStandings",
+        "constructors",
+        "driverStandings",
+        "lapTimes",
+        "pitStops",
+        "qualifying",
+        "seasons",
+        "status"
+      ],
+      "link_fell_back": false,
+      "link_dropped": [],
+      "full_schema_chars": 9622,
+      "narrowed_schema_chars": 9622,
+      "link_response_chars": 327,
+      "sql_count": 2,
+      "reply_chars": 73
+    },
+    {
+      "id": 404,
+      "db": "thrombosis_prediction",
+      "question": "I'm preparing a department audit on how often anti-ribonuclear protein testing comes back clearly elevated among the women in the thrombosis cohort. Among the women in the cohort, what percentage of those with an available anti-ribonuclear protein test result had a clearly elevated result? Please give me the percentage rounded to two decimal places on the 0-100 scale. Note: elevated means a titer strictly above 1:64. Patients never tested for anti-ribonuclear protein should be excluded from both the numerator and the denominator, while a negative reading counts as an available result and is never elevated.",
+      "evidence": "Anti-ribonuclear protein is a serology test reported as a titer reading; a negative reading is a result of zero titer.",
+      "sql": "SELECT ROUND(CAST(SUM(CASE WHEN EXISTS (SELECT 1 FROM Laboratory L WHERE L.ID = P.ID AND CAST(L.RNP AS REAL) > 64) THEN 1 ELSE 0 END) AS REAL) * 100 / COUNT(*), 2) AS pct FROM Patient P WHERE P.SEX = 'F' AND EXISTS (SELECT 1 FROM Laboratory L WHERE L.ID = P.ID AND L.RNP IS NOT NULL)",
+      "difficulty": "challenging",
+      "ok": false,
+      "failure": "wrong_result",
+      "gold_error": null,
+      "pred_error": null,
+      "gold_n": 1,
+      "pred_n": 105,
+      "iterations": 12,
+      "tool_calls": 22,
+      "seconds": 58.0,
+      "predicted_sql": "SELECT DISTINCT l.ID FROM Laboratory l WHERE l.RNP IS NOT NULL",
+      "submitted": false,
+      "linked": true,
+      "linked_tables": [
+        "Patient",
+        "Laboratory",
+        "Examination"
+      ],
+      "link_initial_tables": [
+        "Patient",
+        "Laboratory"
+      ],
+      "link_added_tables": [
+        "Examination"
+      ],
+      "link_fell_back": false,
+      "link_dropped": [],
+      "full_schema_chars": 4621,
+      "narrowed_schema_chars": 4621,
+      "link_response_chars": 105,
+      "sql_count": 20,
+      "reply_chars": 54
+    }
+  ]
+}
