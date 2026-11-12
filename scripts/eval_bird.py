@@ -260,7 +260,8 @@ def evaluate_one(row: dict, sql_timeout: float = 12.0) -> dict:
     # any lookup failure and the run record says whether it was used.
     full_schema_chars = len(ds.schema_json())
     link_info = {
-        "used": False, "tables": [], "fell_back": False, "dropped_tables": [],
+        "used": False, "tables": [], "initial_tables": [], "added_tables": [],
+        "fell_back": False, "dropped_tables": [],
         "full_schema_chars": full_schema_chars, "narrowed_schema_chars": full_schema_chars,
         "link_response_chars": 0,
     }
@@ -276,6 +277,11 @@ def evaluate_one(row: dict, sql_timeout: float = 12.0) -> dict:
             links = {"tables": check["tables"],
                      "columns": {t: c for t, c in (links.get("columns") or {}).items()
                                  if t in check["tables"]}}
+            expanded = schema_link.expand_fk_neighbors(full, links)
+            # In BIRD, a wrong column shortlist is as damaging as a wrong table
+            # shortlist. Keep complete columns for the relevant FK-connected
+            # subgraph; this still cuts whole unrelated tables from the prompt.
+            links = {"tables": expanded["tables"], "columns": {}}
             narrowed = schema_link.apply_links(full, links)
             link_info["narrowed_schema_chars"] = len(narrowed)
             if narrowed != full:
@@ -283,6 +289,8 @@ def evaluate_one(row: dict, sql_timeout: float = 12.0) -> dict:
                     if name == "get_database_schema":
                         tool_map[name] = _fixed_schema(narrowed, fn)
                 link_info.update(used=True, tables=links["tables"],
+                                 initial_tables=check["tables"],
+                                 added_tables=expanded["added_tables"],
                                  dropped_tables=check["dropped"])
         else:
             link_info["fell_back"] = True
@@ -345,6 +353,8 @@ def evaluate_one(row: dict, sql_timeout: float = 12.0) -> dict:
         "submitted": bool(submitted),
         "linked": link_info["used"],
         "linked_tables": link_info["tables"],
+        "link_initial_tables": link_info["initial_tables"],
+        "link_added_tables": link_info["added_tables"],
         "link_fell_back": link_info["fell_back"],
         "link_dropped": link_info.get("dropped_tables", []),
         "full_schema_chars": link_info["full_schema_chars"],

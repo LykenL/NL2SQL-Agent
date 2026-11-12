@@ -161,5 +161,35 @@ def verify_links(schema_json: str, links: dict) -> dict:
     return {"tables": kept, "dropped": dropped, "ok": bool(kept)}
 
 
+def expand_fk_neighbors(schema_json: str, links: dict) -> dict:
+    """Add every one-hop foreign-key neighbour of the linked tables.
+
+    The LLM is good at identifying a fact table but can omit the directly joined
+    dimension table.  A shortlist must therefore be recall-oriented: an FK
+    neighbour is cheap context and omitting it makes otherwise valid joins
+    impossible.  Both outgoing and incoming edges matter in SQLite schemas.
+    """
+    try:
+        full = json.loads(schema_json)
+    except json.JSONDecodeError:
+        return {"tables": [], "added_tables": []}
+
+    selected = [t for t in links.get("tables", []) if t in full]
+    selected_set = set(selected)
+    neighbours: set[str] = set()
+    for table, entry in full.items():
+        for fk in entry.get("foreign_keys", []) or []:
+            target = fk.get("to_table")
+            if table in selected_set and target in full:
+                neighbours.add(target)
+            if target in selected_set:
+                neighbours.add(table)
+
+    # Preserve the model's relevance ordering, then the database's stable
+    # schema order for neighbours, so the prompt is deterministic.
+    added = [table for table in full if table in neighbours and table not in selected_set]
+    return {"tables": selected + added, "added_tables": added}
+
+
 def enabled() -> bool:
     return os.getenv("SCHEMA_LINKING", "off").lower() in {"1", "on", "true", "yes"}

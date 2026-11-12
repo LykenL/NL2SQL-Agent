@@ -24,8 +24,11 @@ SCHEMA = {
     "frpm": {"columns": [
         {"name": "CDSCode", "type": "TEXT"},
         {"name": "Enrollment (K-12)", "type": "INTEGER"},
-    ]},
-    "satscores": {"columns": [{"name": "cds", "type": "TEXT"}]},
+    ], "foreign_keys": [{"from_column": "CDSCode", "to_table": "schools",
+                           "to_column": "CDSCode"}]},
+    "satscores": {"columns": [{"name": "cds", "type": "TEXT"}],
+                  "foreign_keys": [{"from_column": "cds", "to_table": "schools",
+                                    "to_column": "CDSCode"}]},
 }
 
 
@@ -114,6 +117,23 @@ def test_verify_links_fails_only_when_nothing_is_valid():
 def test_verify_links_on_invalid_schema():
     got = schema_link.verify_links("not json", {"tables": ["a"]})
     assert got["ok"] is False
+
+
+def test_expand_fk_neighbors_includes_outgoing_and_incoming_tables():
+    expanded = schema_link.expand_fk_neighbors(
+        _schema_json(), {"tables": ["schools"], "columns": {}}
+    )
+    # frpm and satscores both point at schools, so they are required for a
+    # recall-oriented one-hop schema context.
+    assert expanded["tables"] == ["schools", "frpm", "satscores"]
+    assert expanded["added_tables"] == ["frpm", "satscores"]
+
+
+def test_expand_fk_neighbors_keeps_fact_table_and_dimension_table():
+    expanded = schema_link.expand_fk_neighbors(
+        _schema_json(), {"tables": ["frpm"], "columns": {}}
+    )
+    assert expanded["tables"] == ["frpm", "schools"]
 
 
 def test_enabled_env_flag(monkeypatch):
