@@ -426,6 +426,7 @@ export default function Home() {
     blocked?: number;
   }[]>([]);
   const [showDefs, setShowDefs] = useState(false);
+  const [showSessions, setShowSessions] = useState(false);
   const [tableFilter, setTableFilter] = useState("");
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -739,6 +740,51 @@ export default function Home() {
         onClose={() => setShowDefs(false)}
       />
 
+      {/* Conversation switcher reachable from anywhere: the left pane can be collapsed
+          or covered by the connect modal, and a switcher nobody can find is the same as
+          no switcher. */}
+      {showSessions && (
+        <div
+          className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm"
+          onClick={() => setShowSessions(false)}
+        >
+          <div
+            className="w-full max-w-sm h-full bg-[#0b0b0d] border-l border-white/10 shadow-2xl shadow-black/60 flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 shrink-0">
+              <span className="text-sm font-semibold text-gray-200">Your conversations</span>
+              <button
+                onClick={() => setShowSessions(false)}
+                className="p-1.5 rounded-lg text-gray-500 hover:text-gray-200 hover:bg-white/5"
+                aria-label="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="flex-1 min-h-0">
+              <SessionsPanel
+                apiBase={API_BASE}
+                dataSource={dataSource}
+                activeId={sessionId}
+                refreshKey={sessionsKey}
+                onSelect={(s) => {
+                  openSession(s);
+                  setShowSessions(false);
+                }}
+                onNew={() => {
+                  startNewSession();
+                  setShowSessions(false);
+                }}
+                onDelete={(id) => {
+                  if (id === sessionId) startNewSession();
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {showDbModal && (
         <DbConnectModal
           onConnect={handleConnect}
@@ -779,6 +825,20 @@ export default function Home() {
             <span className="max-w-[170px] truncate">
               {dbConnected === "ok" ? dbLabel : "Not connected · choose a data source"}
             </span>
+          </button>
+
+          <button
+            onClick={() => setShowSessions(true)}
+            title="Saved conversations"
+            className="shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.03] border border-white/10 text-gray-300 hover:text-white hover:bg-white/[0.07] transition-all"
+          >
+            <MessageSquare className="w-3.5 h-3.5 text-indigo-400/80" />
+            <span className="hidden sm:inline">Conversations</span>
+            {sessionCount > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-200 text-[10px] leading-none">
+                {sessionCount}
+              </span>
+            )}
           </button>
 
           <a
