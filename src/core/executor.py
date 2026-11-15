@@ -63,6 +63,38 @@ def extract_code(llm_response: str) -> str:
     # Fallback: Just return the raw response if no markdown block was used
     return llm_response.strip()
 
+_SHOW_SILENCED = False
+
+
+def _silence_show_calls() -> None:
+    """Make figure.show() a no-op for the rest of the process.
+
+    Idempotent, and wrapped in try/except: neither plotting library is a hard
+    dependency of this module, and a missing one is not an error here.
+    """
+    global _SHOW_SILENCED
+    if _SHOW_SILENCED:
+        return
+
+    def _silent(self, *a, **k):
+        return None
+
+    try:
+        import plotly.graph_objects as pgo
+
+        pgo.Figure.show = _silent
+        _SHOW_SILENCED = True
+    except Exception:
+        pass
+    try:
+        import altair as alt
+
+        alt.Chart.show = _silent
+        _SHOW_SILENCED = True
+    except Exception:
+        pass
+
+
 def safe_execute(code_string: str, custom_globals: dict = None) -> str:
     """
     Performs static security checks, then executes the code dynamically using exec().
@@ -74,7 +106,15 @@ def safe_execute(code_string: str, custom_globals: dict = None) -> str:
         if keyword in code_string:
             return f"🚨 SECURITY ALERT: Blocked dangerous keyword '{keyword}' in the code."
 
-    # 2. Dynamic Execution with Output Capture
+    # 2. Neutralise chart.show()
+    #
+    # The renderer reads the `fig` / `chart` variable out of the namespace and serialises
+    # it itself, so calling .show() adds nothing — but plotly's implementation imports
+    # IPython, which is not installed in the runtime image, so a stray `.show()` killed
+    # an otherwise correct chart with ModuleNotFoundError at that line.
+    _silence_show_calls()
+
+    # 3. Dynamic Execution with Output Capture
     exec_globals = custom_globals if custom_globals is not None else {}
     output_buffer = io.StringIO()
     

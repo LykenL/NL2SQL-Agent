@@ -201,6 +201,7 @@ def create_agent_tools(db_uri: str = None, source: DataSource = None,
                     + "VISUALIZATION RULES: "
                     "(1) For bar/line/scatter/pie/funnel charts: use `plotly.graph_objects` and store the figure in a variable named `fig`. "
                     "(2) For heatmaps, distributions, correlation matrices, boxplots, violin plots, faceted layouts: use `altair` and store the chart in a variable named `chart`. "
+                    "(3) Never call .show() on the figure — the canvas reads the `fig` / `chart` variable directly, and .show() would only try to open a notebook or a browser. "
                     "Do NOT use plotly.express, matplotlib, or seaborn. "
                     "Do NOT manually set dark themes — the sandbox auto-applies a unified dark theme."
                 ),
