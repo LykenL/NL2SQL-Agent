@@ -259,13 +259,16 @@ def run_agent_loop(
         def search_memory(self, *a, **k):
             return []
 
-    try:
-        sqlite_mem = (
-            SQLiteMemory("sqlite:///data/episodic_memory/benchmark.sqlite")
-            if _bench else SQLiteMemory()
-        )
-    except Exception:
+    # Benchmark questions are independent tasks: writing each one into the shared
+    # conversation store put hundreds of "bird_<id>_<hash>" rows into the product's
+    # sidebar, which is where real conversations are listed.
+    if _bench:
         sqlite_mem = _NoMemory()
+    else:
+        try:
+            sqlite_mem = SQLiteMemory()
+        except Exception:
+            sqlite_mem = _NoMemory()
     # No vector layer. DeepSeek exposes no embeddings endpoint (POST /v1/embeddings
     # returns 404), so a semantic store had nothing to embed with, and cross-session
     # recall is not something this product uses. What the UI relies on is the stored

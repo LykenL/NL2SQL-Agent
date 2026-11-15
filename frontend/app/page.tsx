@@ -445,6 +445,7 @@ export default function Home() {
   const [sessionId, setSessionId] = useState<string>("");
   const [leftTab, setLeftTab] = useState<"tables" | "sessions">("tables");
   const [sessionsKey, setSessionsKey] = useState(0);
+  const [sessionCount, setSessionCount] = useState(0);
 
   useEffect(() => {
     const KEY = "copilot.sessionId";
@@ -518,6 +519,24 @@ export default function Home() {
   const [dbLabel, setDbLabel] = useState<string>("Default DB");
   const [dbConnected, setDbConnected] = useState<ConnStatus>("none");
   const [showDbModal, setShowDbModal] = useState(true);
+
+  // A count on the tab, so the conversation list is discoverable without opening it.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const qs = dataSource ? `?data_source=${encodeURIComponent(dataSource)}` : "";
+        const res = await fetch(`${API_BASE}/api/sessions${qs}`);
+        const json = await res.json();
+        if (!cancelled) setSessionCount((json.sessions ?? []).length);
+      } catch {
+        if (!cancelled) setSessionCount(0);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [dataSource, sessionsKey]);
 
   // ── Load schema ─────────────────────────────────────────────────────────
   const loadSchema = useCallback((uri?: string, ds?: string) => {
@@ -795,10 +814,10 @@ export default function Home() {
           <div className="grid grid-cols-2 shrink-0 border-b border-white/10 bg-[#0d0d0d]">
             <button
               onClick={() => setLeftTab("tables")}
-              className={`flex items-center justify-center gap-1.5 py-2.5 text-[11px] font-semibold uppercase tracking-wider transition-colors border-b-2 ${
+              className={`flex items-center justify-center gap-1.5 py-2.5 text-[12px] font-semibold uppercase tracking-wider transition-colors border-b-2 ${
                 leftTab === "tables"
                   ? "text-indigo-300 border-indigo-500 bg-indigo-500/5"
-                  : "text-gray-500 border-transparent hover:text-gray-300 hover:bg-white/[0.03]"
+                  : "text-gray-300 border-transparent hover:text-white hover:bg-white/[0.06]"
               }`}
             >
               <Table2 className="w-3.5 h-3.5" />
@@ -806,14 +825,19 @@ export default function Home() {
             </button>
             <button
               onClick={() => setLeftTab("sessions")}
-              className={`flex items-center justify-center gap-1.5 py-2.5 text-[11px] font-semibold uppercase tracking-wider transition-colors border-b-2 ${
+              className={`flex items-center justify-center gap-1.5 py-2.5 text-[12px] font-semibold uppercase tracking-wider transition-colors border-b-2 ${
                 leftTab === "sessions"
                   ? "text-indigo-300 border-indigo-500 bg-indigo-500/5"
-                  : "text-gray-500 border-transparent hover:text-gray-300 hover:bg-white/[0.03]"
+                  : "text-gray-300 border-transparent hover:text-white hover:bg-white/[0.06]"
               }`}
             >
               <MessageSquare className="w-3.5 h-3.5" />
               Sessions
+              {sessionCount > 0 && (
+                <span className="ml-0.5 px-1.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-200 text-[10px] leading-none">
+                  {sessionCount}
+                </span>
+              )}
             </button>
           </div>
 
