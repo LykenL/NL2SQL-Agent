@@ -477,7 +477,15 @@ export default function Home() {
     setRenderError("");
     setRunStdout("");
     setHasChart(false);
-    setSessionsKey((k) => k + 1);
+    // Create it server-side now, so the list shows the new conversation immediately
+    // instead of staying empty until the first message arrives.
+    fetch(`${API_BASE}/api/sessions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, data_source: dataSource || undefined }),
+    })
+      .catch(() => {})
+      .finally(() => setSessionsKey((k) => k + 1));
     setLeftTab("sessions");
   }, []);
 

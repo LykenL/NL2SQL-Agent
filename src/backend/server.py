@@ -484,6 +484,23 @@ def seed_metrics():
     return {"metrics": [m.to_dict() for m in seed_chinook_demo(reg)]}
 
 
+class SessionCreate(BaseModel):
+    id: str
+    data_source: str | None = None
+
+
+@app.post("/api/sessions")
+async def create_session(payload: SessionCreate):
+    """Create the row as soon as the user starts a conversation.
+
+    Otherwise a new conversation exists only in the browser until its first message
+    arrives, so the list looks frozen and the button looks broken.
+    """
+    memory = SQLiteMemory()
+    memory.touch_session(payload.id, payload.data_source)
+    return {"id": payload.id, "created": True}
+
+
 @app.get("/api/sessions")
 async def list_sessions(data_source: str | None = None):
     """Sessions for the sidebar. `data_source` filters to one connected database."""

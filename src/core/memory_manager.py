@@ -134,8 +134,18 @@ class DatabaseMemory:
         Driven by `sessions` rather than `history` so a session exists even before
         its first message lands, and LEFT JOINed so it still appears if that fails.
         """
-        where = "WHERE s.data_source = :ds" if data_source else ""
-        params = {"ds": data_source} if data_source else {}
+        # Rows written before the identity fix hold the prefix-less label
+        # ("proj.dataset"), while the browser sends the spec ("marts:proj.dataset").
+        # Match both so a conversation does not disappear from its own list.
+        params = {}
+        if data_source:
+            variants = {data_source, data_source.split(":", 1)[-1]}
+            where = "WHERE s.data_source IN (" + ", ".join(
+                f":ds{i}" for i in range(len(variants))
+            ) + ")"
+            params = {f"ds{i}": v for i, v in enumerate(sorted(variants))}
+        else:
+            where = ""
         with self.engine.connect() as conn:
             query = text(f"""
                 SELECT s.session_id,

@@ -33,6 +33,8 @@ _TABLE_REF = re.compile(r"`?([\w-]+)\.([\w-]+)\.([\w-]+)`?")
 
 
 class MartSource(BigQueryDataSource):
+    spec_prefix = "marts"
+
     def __init__(
         self,
         project: str,

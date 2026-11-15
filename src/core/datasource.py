@@ -46,6 +46,10 @@ class Estimate:
 class DataSource:
     dialect: str = "unknown"
     label: str = "unknown"
+    # The identifier the API was called with ("marts:project.dataset"). Conversations
+    # are stamped with it so the sidebar can filter by exactly the string the browser
+    # sends; `label` is for humans and differs (it drops the "marts:" prefix).
+    id: str = "unknown"
     supports_estimates: bool = False
 
     # -- schema -------------------------------------------------------------
@@ -81,6 +85,7 @@ class SqlDataSource(DataSource):
         self.uri = uri
         self.dialect = uri.split("://", 1)[0].split("+", 1)[0] or "sql"
         self.label = uri.split("/")[-1] or self.dialect
+        self.id = uri
         self._engine = None
         # Every statement that actually ran, in order. The evaluation needs the
         # SQL the agent executed, and pulling it out of generated Python with a
@@ -156,6 +161,8 @@ _BQ_FORBIDDEN = re.compile(
 
 
 class BigQueryDataSource(DataSource):
+    spec_prefix = "bigquery"
+
     dialect = "bigquery"
     supports_estimates = True
 
@@ -179,6 +186,7 @@ class BigQueryDataSource(DataSource):
         self.max_bytes = max_bytes if max_bytes is not None else _env_int("BQ_MAX_BYTES")
         self.max_rows = max_rows
         self.label = f"{project}.{dataset}"
+        self.id = f"{self.spec_prefix}:{project}.{dataset}"
         self._client = None
         self._schema: Optional[str] = None
 

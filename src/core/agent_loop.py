@@ -527,7 +527,9 @@ def _run_agent_turns(user_message, session_id, client, tools_schema, tool_map,
         # sidebar can list and filter conversations.
         try:
             sqlite_mem.touch_session(
-                session_id, getattr(data_source, "label", None) if data_source else None
+                session_id,
+                (getattr(data_source, "id", None) or getattr(data_source, "label", None))
+                if data_source else None,
             )
         except Exception:
             pass
