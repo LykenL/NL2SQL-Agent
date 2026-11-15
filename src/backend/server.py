@@ -5,7 +5,7 @@ import shutil
 from contextlib import asynccontextmanager
 from typing import Any
 from fastapi import FastAPI, HTTPException, UploadFile, File, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
@@ -32,6 +32,35 @@ from src.core.datasource import (
     source_from_spec,
 )
 
+def _scrub(text: str) -> str:
+    """Remove anything that looks like a credential before quoting an error back."""
+    import re
+
+    text = re.sub(r"://[^\s:@/]+:[^\s@/]+@", "://***:***@", text)
+    text = re.sub(r"(api[_-]?key|token|password)=[^\s&]+", r"\1=***", text, flags=re.I)
+    return text[:600]
+
+
+async def _unhandled(request: Request, exc: Exception):
+    """Return the exception, not just "Internal Server Error".
+
+    Without this, a 500 in production is opaque: the caller sees three words and the
+    only way to learn more is the host's log viewer. The message is scrubbed of
+    credentials first; everything else is a class name and a reason.
+    """
+    import traceback
+
+    frame = traceback.extract_tb(exc.__traceback__)[-1] if exc.__traceback__ else None
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": _scrub(f"{type(exc).__name__}: {exc}"),
+            "endpoint": request.url.path,
+            "at": _scrub(f"{frame.filename.split('/')[-1]}:{frame.lineno} in {frame.name}") if frame else None,
+        },
+    )
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
     yield
@@ -41,6 +70,7 @@ async def _lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Data Copilot API (V2)", lifespan=_lifespan)
+app.add_exception_handler(Exception, _unhandled)
 
 # If a chart never paints, say so instead of leaving an empty dark box.
 _CHART_WATCHDOG = """<script>
