@@ -20,7 +20,7 @@ from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(__file__), "../../.env"))
 
 from src.core import tracing  # noqa: E402
-from src.core.memory_manager import SQLiteMemory, VectorMemory
+from src.core.memory_manager import SQLiteMemory
 from src.core.db_reader import extract_db_schema
 from src.core.agent_loop import run_agent_loop
 from src.core.agent_tools import create_agent_tools
@@ -499,30 +499,6 @@ async def list_sessions(data_source: str | None = None):
 async def session_messages(session_id: str, limit: int = 200):
     memory = SQLiteMemory()
     return {"messages": memory.get_messages(session_id, limit=limit)}
-
-
-@app.post("/api/sessions/{session_id}/compress")
-async def compress_session(session_id: str, data_source: str | None = None):
-    """Distil a conversation into a long-term note on demand.
-
-    Runs synchronously so the caller can see what was kept, unlike the automatic
-    background pass that fires after each turn.
-    """
-    from src.agents.compression_agent import compress_session_memory
-
-    return compress_session_memory(session_id, data_source=data_source)
-
-
-@app.get("/api/memories")
-async def list_memories(q: str, data_source: str | None = None, limit: int = 5):
-    """What long-term memory would be recalled for this query — for inspection."""
-    from src.core.memory_manager import VectorMemory
-
-    try:
-        notes = VectorMemory().search_memory(q, n_results=limit, data_source=data_source)
-    except Exception as exc:
-        return {"memories": [], "error": f"{type(exc).__name__}: {exc}"[:200]}
-    return {"memories": notes}
 
 
 @app.delete("/api/sessions/{session_id}")

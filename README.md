@@ -45,7 +45,7 @@ Kolada API ──Dagster──► bronze ──dbt staging──► silver ─�
 | **Observability** | One trace per chat turn: a `chat-turn` root (input is the question only) with `semantic-resolve`, one `generation` per model call (tokens and cost), one `tool` per tool call, and `definition-block` when the semantic layer rejects code. `session_id` groups turns in the Sessions view. A no-op when `LANGFUSE_*` is unset. |
 | Error recovery | Sandbox failures return the failing line plus the real column names, so the model corrects itself on the next turn. Stack frames go to logs, never to the user. |
 | Multiple sources | SQLite / PostgreSQL / MySQL / BigQuery / published marts through one `DataSource` interface. |
-| Memory | Episodic (SQLite/Postgres, per turn) plus semantic (Pinecone, falling back to local ChromaDB when no Pinecone credentials are set; both embed through an Ollama endpoint). After each turn a background pass distils the session into one note, keyed by session id and scoped to the connected data source, and later sessions recall it. Skipped in benchmark mode, where questions are independent. The chat model is pluggable: any OpenAI-compatible endpoint via `LLM_BASE_URL` / `LLM_API_KEY`, DeepSeek by default. |
+| Memory | Conversation history per session (SQLite locally, Postgres in production): every turn is stored, the last ten are replayed into context, and the sidebar lists, reopens and deletes conversations. There is deliberately no cross-session vector memory — DeepSeek exposes no embeddings endpoint, so a semantic store would have nothing to embed with. The chat model is pluggable: any OpenAI-compatible endpoint via `LLM_BASE_URL` / `LLM_API_KEY`, DeepSeek by default. |
 
 ---
 

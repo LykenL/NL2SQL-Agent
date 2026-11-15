@@ -5,9 +5,8 @@ import json
 import uuid
 import time
 from src.core import tracing
-from src.core.memory_manager import SQLiteMemory, VectorMemory
+from src.core.memory_manager import SQLiteMemory
 from src.core.semantic_registry import SemanticRegistry, format_violations
-from src.agents.compression_agent import compress_in_background
 
 # ── Chat-cleanliness guard ────────────────────────────────────────────────────
 # Code must live ONLY in the "Generated Script" pane. The model is told not to
@@ -267,10 +266,10 @@ def run_agent_loop(
         )
     except Exception:
         sqlite_mem = _NoMemory()
-    try:
-        vector_mem = None if _bench else VectorMemory()
-    except Exception:
-        vector_mem = None
+    # No vector layer. DeepSeek exposes no embeddings endpoint (POST /v1/embeddings
+    # returns 404), so a semantic store had nothing to embed with, and cross-session
+    # recall is not something this product uses. What the UI relies on is the stored
+    # transcript per session.
 
     # ── Confirmed business definitions for this question ─────────────────────
     # Enforcement is on by default; SEMANTIC_ENFORCE=off disables both the
@@ -486,7 +485,7 @@ You have access to tools to fetch the database schema and execute Python code.
     try:
         return _run_agent_turns(
             user_message, session_id, client, tools_schema, tool_map,
-            sqlite_mem, vector_mem, registry, active_metrics, trace, langfuse_turn,
+            sqlite_mem, registry, active_metrics, trace, langfuse_turn,
             system_instruction, data_source, traced_ctx,
         )
     finally:
@@ -495,7 +494,7 @@ You have access to tools to fetch the database schema and execute Python code.
 
 
 def _run_agent_turns(user_message, session_id, client, tools_schema, tool_map,
-                     sqlite_mem, vector_mem, registry, active_metrics, trace,
+                     sqlite_mem, registry, active_metrics, trace,
                      traced_turn, system_instruction, data_source=None,
                      traced_ctx=None):
     # Every observation is created on the same OTel context explicitly.
@@ -521,17 +520,6 @@ def _run_agent_turns(user_message, session_id, client, tools_schema, tool_map,
         messages.append({"role": msg["role"], "content": content})
         
     try:
-        recalled_memories = (
-            vector_mem.search_memory(
-                user_message,
-                n_results=1,
-                data_source=getattr(data_source, "label", None) if data_source else None,
-            ) if vector_mem else []
-        )
-    except Exception:
-        recalled_memories = []
-
-    try:
         # Register the session and stamp it with the source it is about, so the
         # sidebar can list and filter conversations.
         try:
@@ -547,12 +535,7 @@ def _run_agent_turns(user_message, session_id, client, tools_schema, tool_map,
     if traced_turn is not None:
         traced_turn.update(input={"question": user_message})
 
-    if recalled_memories:
-        enriched_input = f"[Recalled Past Knowledge: {recalled_memories[0]}]\n\nCurrent Request: {user_message}"
-    else:
-        enriched_input = user_message
-        
-    messages.append({"role": "user", "content": enriched_input})
+    messages.append({"role": "user", "content": user_message})
     
     # BIRD's hard questions need several exploratory queries; the product flows
     # converge in fewer. Configurable so a benchmark run does not silently hit a
@@ -736,17 +719,7 @@ def _run_agent_turns(user_message, session_id, client, tools_schema, tool_map,
     except Exception:
         pass
 
-    # Distillation runs off the request path: the user already has the answer, and a
-    # summarisation failure must not surface as a failed turn. Skipped in benchmark
-    # mode, where every question is an independent task and no memory is wanted.
-    if os.getenv("AGENT_PROMPT", "").lower() != "bird":
-        try:
-            compress_in_background(
-                session_id, data_source=getattr(data_source, "label", None) if data_source else None
-            )
-        except Exception:
-            pass
-    
+
     exec_time = time.time() - start_time
     # Reported to callers without widening the return signature. The dict wins
     # over the function attribute: under a thread pool the attribute is shared,

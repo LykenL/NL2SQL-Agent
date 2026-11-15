@@ -14,8 +14,9 @@
    * 定义了大模型的 System Prompt，注册了 `get_database_schema` 和 `execute_python_code` 工具，负责处理 Tool Calling 闭环与限流。
 3. **Sandbox / 执行层 (`executor.py`, `db_reader.py`)**
    * 安全沙盒环境。利用 AST 和 Regex 拦截高危操作，提供有限的 `globals()` 上下文供 `exec()` 运行大模型生成的代码。
-4. **Memory / 存储层 (`memory_manager.py`, `compression_agent.py`)**
-   * 核心存储枢纽。SQLite（或 Postgres）负责 CRUD 会话明细；每轮结束后后台压缩把整段会话蒸馏成一条笔记，写入向量库（配置了 Pinecone 凭据即用 Pinecone，否则落到本地 ChromaDB）做持久化。
+4. **Memory / 存储层 (`memory_manager.py`)**
+   * 核心存储枢纽。SQLite（生产用 Postgres）负责会话明细的 CRUD：每轮写入、取最近 10 条回灌上下文、侧栏按数据源列会话、可读回整段记录、可删除。
+   * **没有跨会话向量记忆**。DeepSeek 不提供 embeddings 端点（`POST /v1/embeddings` 返回 404），语义库没有可用的向量化手段；这个功能已从运行时移除。
 
 ---
 
@@ -78,21 +79,12 @@ graph TD
         D[SQLite: sessions 表]
     end
     
-    subgraph Semantic Memory (语义长期记忆)
-        E[后台大模型: compression_agent.py]
-        F[(向量库: Pinecone / 本地 ChromaDB)]
-    end
-    
-    C -->|后台闲时抽取| E
-    E -->|浓缩业务逻辑| F
-    
-    F -->|余弦相似度检索| B
-    B -->|注入 Prompt Context| G[主 Agent 进行最终回答]
+    B -->|最近 10 条历史| G[主 Agent 进行最终回答]
 ```
 
 **设计哲学**：
-*   **Episodic Memory (SQLite)** 是“短期照相机”，它精准地记录了对话的每一个字，保证了 UI 左侧边栏的准确还原。
-*   **Semantic Memory (ChromaDB)** 是“长期经验池”，它去除了冗余的问候语和具体数据，只保留“方法论”。通过 `all-MiniLM-L6-v2` 嵌入模型，实现了跨越时间的隐式规则继承。
+*   **会话记忆 (SQLite / Postgres)** 是“短期照相机”，它精准记录了对话的每一个字，支撑 UI 左侧边栏的列表、切换与恢复。
+*   没有“长期经验池”。DeepSeek 无 embeddings 端点，语义检索缺少可用的向量化手段，这一层已从运行时移除——见 `architecture_deep_dive.md` 第 2.2 节。
 
 ---
 
@@ -107,8 +99,7 @@ data_copilot/
 ├── src/core/agent_tools.py   # 提供给大模型的 Native Tools（schema + 代码执行）
 ├── src/core/executor.py      # 本地代码安全沙盒：stdout 劫持 + 危险关键词拦截
 ├── src/core/db_reader.py     # 目标数据库 Schema 的只读抽取组件
-├── src/core/memory_manager.py# SQLite 情景记忆的 CRUD 封装 + ChromaDB 语义记忆
-├── src/agents/compression_agent.py # 后台第二大模型：记忆降维 + ChromaDB 写入
+├── src/core/memory_manager.py# 会话记忆的 CRUD 封装（SQLite / Postgres）
 └── data/episodic_memory/     # 本地生成的 SQLite 物理文件
 ```
 

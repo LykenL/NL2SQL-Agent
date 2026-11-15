@@ -9,7 +9,7 @@ This guide is designed for Data Scientist (DS) and AI Engineer interviews. Inter
 ## 1. 一分钟电梯演讲 (Elevator Pitch)
 
 **🇺🇸 English Version:**
-> "I developed a Multi-Agent Data Copilot from scratch. It is not just a Text-to-SQL chatbot, but an autonomous data scientist. By utilizing Native Tool Calling, I empowered the agent to autonomously fetch database schemas and execute Python code in a secure sandbox. To solve the context window overflow issue during long multi-turn conversations, I designed a Dual-Memory architecture (SQLite for episodic memory + ChromaDB for semantic memory) and implemented a background compression agent for asynchronous knowledge retrieval (RAG). Ultimately, the system achieved a 75% success rate on a highly adversarial dataset I built."
+> "I developed a Multi-Agent Data Copilot from scratch. It is not just a Text-to-SQL chatbot, but an autonomous data scientist. By utilizing Native Tool Calling, I empowered the agent to autonomously fetch database schemas and execute Python code in a secure sandbox. Conversation history is persisted per session (SQLite locally, Postgres in production) so a refresh returns to the same conversation, and every turn emits the exact script that produced its answer so a data team can verify it. I benchmarked the agent on BIRD Mini-Dev: 500 questions over 11 databases, Execution Accuracy 0.750."
 
 **🇨🇳 中文话术:**
 > “我独立从 0 到 1 开发了一个基于 Multi-Agent 架构的 Data Copilot。它不仅仅是一个能够 Text-to-SQL 的聊天机器人，而是一个真正的智能体数据科学家。我通过 Native Tool Calling 赋予了它读取数据库 Schema 和沙盒执行 Python 代码的能力。为了解决多轮长对话的上下文爆炸问题，我设计了 SQLite (短时) + ChromaDB (长时) 的双轨记忆系统，并引入了一个后台异步运转的记忆压缩大模型，实现了真正的跨会话语义知识召回。最终，这套系统在我自己构建的包含‘幻觉陷阱’的对抗性测评集上达到了 75% 的通过率。”
@@ -27,8 +27,8 @@ This guide is designed for Data Scientist (DS) and AI Engineer interviews. Inter
 ### 🌟 亮点 2：Dual-Engine 双轨记忆架构 (Dual-Engine Memory Architecture)
 *   **Technical Detail (技术细节)**: Solves the "goldfish memory" (amnesia) and Token overflow issues inherent in LLMs.
 *   **How to Pitch (话术)**: 
-    *   **EN**: "I designed an enterprise-grade memory system: 1) A frontend **SQLite** database for Episodic Memory to render UI history. 2) A background `compression_agent` that asynchronously distills conversations into high-dimensional logic chunks, stored in **ChromaDB** for Semantic Memory. 3) When a new session starts, it performs a vector similarity search (RAG) to silently inject learned business rules into the current context."
-    *   **CN**: “为了解决上下文溢出，我设计了双轨系统：1) 前台用 SQLite 做情景记忆。2) 后台写了一个独立 Agent，在闲时将对话浓缩，存入 ChromaDB 向量数据库做语义记忆。3) 新对话开启时，系统通过 RAG 检索，悄无声息地将过去学到的业务规则注入到当前上下文中。”
+    *   **EN**: "Session history is persisted server-side, with the sidebar listing, reopening and deleting conversations; every answer ships the script that produced it. I dropped the vector-memory layer after finding DeepSeek exposes no embeddings endpoint — keeping a semantic store that cannot embed would have been a feature that looks present and never runs."
+    *   **CN**: “会话历史落在服务端，侧栏可以列出、切回、删除；每个回答都附上真正跑过的那段脚本。向量记忆那层我删掉了——DeepSeek 不提供 embeddings 端点，留一个嵌不了向量的语义库，等于留一个看起来存在、实际永远跑不起来的功能。”
 
 ---
 

@@ -2,7 +2,6 @@ openai
 pandas
 python-dotenv
 sqlalchemy>=2.0.0
-chromadb
 plotly
 altair>=5.0.0
 psycopg2-binary
@@ -12,9 +11,8 @@ pymysql
 fastapi
 uvicorn
 python-multipart  # required by /api/upload (UploadFile / File) — missing here crashed the service on boot
-requests          # imported lazily by memory_manager
+requests
 google-cloud-bigquery>=3.25  # BigQuery data source (metadata + dry-run + query)
-pinecone
 sse-starlette
 langfuse>=5,<6  # tracing; optional at runtime — no keys means a no-op. v5 filters
                 # HTTP/database spans by default, so BigQuery client spans stay out

@@ -26,11 +26,6 @@ class _Mem:
     def add_message(self, *a, **k): pass
 
 
-class _Vec:
-    def __init__(self, *a, **k): pass
-    def search_memory(self, *a, **k): return []
-
-
 class _Fn:
     def __init__(self, name, args): self.name, self.arguments = name, args
 
@@ -83,7 +78,7 @@ def registry(tmp_path, monkeypatch):
 def _run(monkeypatch, turns):
     client = _ScriptedClient(turns)
     monkeypatch.setattr(loop, "SQLiteMemory", _Mem)
-    monkeypatch.setattr(loop, "VectorMemory", _Vec)
+    # no vector layer any more: the loop keeps only the transcript
     # agent_loop builds its client through tracing.openai_client() so the
     # model call can be a traced generation; stub it at the seam.
     monkeypatch.setattr(loop.tracing, "openai_client", lambda *a, **k: client)
