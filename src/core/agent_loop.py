@@ -528,6 +528,14 @@ def _run_agent_turns(user_message, session_id, client, tools_schema, tool_map,
         recalled_memories = []
 
     try:
+        # Register the session and stamp it with the source it is about, so the
+        # sidebar can list and filter conversations.
+        try:
+            sqlite_mem.touch_session(
+                session_id, getattr(data_source, "label", None) if data_source else None
+            )
+        except Exception:
+            pass
         sqlite_mem.add_message(session_id, "user", user_message)
     except Exception:
         pass

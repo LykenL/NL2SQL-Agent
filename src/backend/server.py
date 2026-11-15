@@ -455,9 +455,27 @@ def seed_metrics():
 
 
 @app.get("/api/sessions")
-async def list_sessions():
+async def list_sessions(data_source: str | None = None):
+    """Sessions for the sidebar. `data_source` filters to one connected database."""
     memory = SQLiteMemory()
-    return {"sessions": memory.get_all_sessions()}
+    try:
+        return {"sessions": memory.get_all_sessions(data_source=data_source)}
+    except Exception as exc:
+        # A memory backend outage must not break the UI's ability to open a chat.
+        return {"sessions": [], "error": f"{type(exc).__name__}: {exc}"[:200]}
+
+
+@app.get("/api/sessions/{session_id}/messages")
+async def session_messages(session_id: str, limit: int = 200):
+    memory = SQLiteMemory()
+    return {"messages": memory.get_messages(session_id, limit=limit)}
+
+
+@app.delete("/api/sessions/{session_id}")
+async def delete_session(session_id: str):
+    memory = SQLiteMemory()
+    memory.delete_session(session_id)
+    return {"deleted": session_id}
 
 
 class ExecuteRequest(BaseModel):
