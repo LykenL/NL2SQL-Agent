@@ -10,6 +10,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DefinitionsPanel, type MetricDef } from "@/components/definitions-panel";
+import { SessionsPanel, type SessionRow } from "@/components/sessions-panel";
 import {
   Terminal,
   Code2,
@@ -31,6 +32,9 @@ import {
   BookOpen,
   ShieldAlert,
   Activity,
+  MessageSquare,
+  Plus,
+  Table2,
 } from "lucide-react";
 import {
   Panel,
@@ -435,7 +439,78 @@ export default function Home() {
   const [rendering, setRendering] = useState<boolean>(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const [sessionId] = useState(() => Math.random().toString(36).substring(7));
+  // The session id is the only handle on a stored conversation. A random id per page
+  // load meant every refresh started a new conversation and the previous one became
+  // unreachable, so it is kept in localStorage.
+  const [sessionId, setSessionId] = useState<string>("");
+  const [leftTab, setLeftTab] = useState<"tables" | "sessions">("tables");
+  const [sessionsKey, setSessionsKey] = useState(0);
+
+  useEffect(() => {
+    const KEY = "copilot.sessionId";
+    let id = "";
+    try {
+      id = window.localStorage.getItem(KEY) || "";
+    } catch {
+      // storage can be unavailable (private mode); fall through to a fresh id
+    }
+    if (!id) {
+      id = Math.random().toString(36).substring(2, 9);
+      try {
+        window.localStorage.setItem(KEY, id);
+      } catch {}
+    }
+    setSessionId(id);
+  }, []);
+
+  const startNewSession = useCallback(() => {
+    const id = Math.random().toString(36).substring(2, 9);
+    try {
+      window.localStorage.setItem("copilot.sessionId", id);
+    } catch {}
+    setSessionId(id);
+    setMessages([]);
+    setActiveCode("");
+    setRenderHtml("");
+    setRenderError("");
+    setRunStdout("");
+    setHasChart(false);
+    setSessionsKey((k) => k + 1);
+    setLeftTab("sessions");
+  }, []);
+
+  const openSession = useCallback((s: SessionRow) => {
+    try {
+      window.localStorage.setItem("copilot.sessionId", s.id);
+    } catch {}
+    setSessionId(s.id);
+  }, []);
+
+  // Hydrate the transcript whenever the active conversation changes — including on
+  // first load, so a refresh returns to the conversation the user was in rather than
+  // to an empty chat with an id nothing is displayed for.
+  useEffect(() => {
+    if (!sessionId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/sessions/${sessionId}/messages`);
+        const json = await res.json();
+        if (cancelled) return;
+        const rows = (json.messages ?? []) as { role: string; content: string }[];
+        setMessages(
+          // The transcript is restored for reading. The script and chart of an old
+          // turn are not re-derived, so the canvas stays empty until a new answer.
+          rows.map((m) => ({ role: m.role, content: m.content })),
+        );
+      } catch {
+        if (!cancelled) setMessages([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId]);
 
   // ── DB connection state ─────────────────────────────────────────────────
   const [dbUri, setDbUri] = useState<string>("");
@@ -620,6 +695,8 @@ export default function Home() {
       ]);
     } finally {
       setLoading(false);
+      // The conversation may have just been created or renamed server-side.
+      setSessionsKey((k) => k + 1);
     }
   };
 
@@ -712,6 +789,51 @@ export default function Home() {
         <PanelGroup orientation="horizontal" className="h-full w-full">
           {/* Left Pane: Schema (Data Context) */}
           <Panel defaultSize={22} minSize={18} id="schema-panel" className="flex flex-col min-h-0 bg-[#0a0a0a] shadow-2xl z-20">
+          {/* Two things live in this pane: what the data is, and what has been asked
+              about it. A tab strip keeps both one click away without widening the
+              pane or stealing width from the workspace. */}
+          <div className="grid grid-cols-2 shrink-0 border-b border-white/10 bg-[#0d0d0d]">
+            <button
+              onClick={() => setLeftTab("tables")}
+              className={`flex items-center justify-center gap-1.5 py-2.5 text-[11px] font-semibold uppercase tracking-wider transition-colors border-b-2 ${
+                leftTab === "tables"
+                  ? "text-indigo-300 border-indigo-500 bg-indigo-500/5"
+                  : "text-gray-500 border-transparent hover:text-gray-300 hover:bg-white/[0.03]"
+              }`}
+            >
+              <Table2 className="w-3.5 h-3.5" />
+              Tables
+            </button>
+            <button
+              onClick={() => setLeftTab("sessions")}
+              className={`flex items-center justify-center gap-1.5 py-2.5 text-[11px] font-semibold uppercase tracking-wider transition-colors border-b-2 ${
+                leftTab === "sessions"
+                  ? "text-indigo-300 border-indigo-500 bg-indigo-500/5"
+                  : "text-gray-500 border-transparent hover:text-gray-300 hover:bg-white/[0.03]"
+              }`}
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              Sessions
+            </button>
+          </div>
+
+          {leftTab === "sessions" && (
+            <div className="flex-1 min-h-0">
+              <SessionsPanel
+                apiBase={API_BASE}
+                dataSource={dataSource}
+                activeId={sessionId}
+                refreshKey={sessionsKey}
+                onSelect={openSession}
+                onNew={startNewSession}
+                onDelete={(id) => {
+                  if (id === sessionId) startNewSession();
+                }}
+              />
+            </div>
+          )}
+
+          {leftTab === "tables" && (<>
           <div className="p-4 border-b border-white/10 flex items-center justify-between bg-[#121212] shrink-0">
             <div className="flex items-center gap-2 min-w-0">
               <Database className="w-4 h-4 text-indigo-400 shrink-0" />
@@ -793,6 +915,7 @@ export default function Home() {
               )}
             </div>
           </ScrollArea>
+          </>)}
           </Panel>
 
           {/* Resizer 1 (Left / Center) */}
