@@ -15,7 +15,7 @@
 3. **Sandbox / 执行层 (`executor.py`, `db_reader.py`)**
    * 安全沙盒环境。利用 AST 和 Regex 拦截高危操作，提供有限的 `globals()` 上下文供 `exec()` 运行大模型生成的代码。
 4. **Memory / 存储层 (`memory_manager.py`, `compression_agent.py`)**
-   * 核心存储枢纽。SQLite 负责 CRUD 会话明细；后台压缩智能体负责将数据推送到 ChromaDB 做向量持久化。
+   * 核心存储枢纽。SQLite（或 Postgres）负责 CRUD 会话明细；每轮结束后后台压缩把整段会话蒸馏成一条笔记，写入向量库（配置了 Pinecone 凭据即用 Pinecone，否则落到本地 ChromaDB）做持久化。
 
 ---
 
@@ -80,7 +80,7 @@ graph TD
     
     subgraph Semantic Memory (语义长期记忆)
         E[后台大模型: compression_agent.py]
-        F[(ChromaDB 向量库)]
+        F[(向量库: Pinecone / 本地 ChromaDB)]
     end
     
     C -->|后台闲时抽取| E

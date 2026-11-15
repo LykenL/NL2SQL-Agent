@@ -42,6 +42,11 @@ class DatabaseMemory:
             # Which database the conversation was about. Switching the data source
             # otherwise leaves a session list whose entries no longer mean anything.
             Column('data_source', String),
+            # Compression bookkeeping: how many messages have been distilled, and when.
+            # Re-running compression on unchanged history would duplicate memory entries
+            # and pay for the same summarisation twice.
+            Column('compressed_upto', Integer, default=0),
+            Column('compressed_at', String),
         )
 
         self.metadata.create_all(self.engine)
@@ -60,12 +65,17 @@ class DatabaseMemory:
             existing = {c["name"] for c in inspect(self.engine).get_columns("sessions")}
         except Exception:
             return
-        if "data_source" not in existing:
-            try:
-                with self.engine.begin() as conn:
-                    conn.execute(text("ALTER TABLE sessions ADD COLUMN data_source VARCHAR"))
-            except Exception:
-                pass  # another worker may have added it already
+        for column, ddl in (
+            ("data_source", "ALTER TABLE sessions ADD COLUMN data_source VARCHAR"),
+            ("compressed_upto", "ALTER TABLE sessions ADD COLUMN compressed_upto INTEGER DEFAULT 0"),
+            ("compressed_at", "ALTER TABLE sessions ADD COLUMN compressed_at VARCHAR"),
+        ):
+            if column not in existing:
+                try:
+                    with self.engine.begin() as conn:
+                        conn.execute(text(ddl))
+                except Exception:
+                    pass  # another worker may have added it already
 
     def add_message(self, session_id: str, role: str, content: str):
         with self.engine.begin() as conn:
@@ -198,6 +208,33 @@ class DatabaseMemory:
                     .values(data_source=data_source)
                 )
 
+    def compression_state(self, session_id: str) -> dict:
+        """How much of this session has already been distilled."""
+        with self.engine.connect() as conn:
+            row = conn.execute(
+                text("SELECT COALESCE(compressed_upto, 0) AS upto, compressed_at "
+                     "FROM sessions WHERE session_id = :s"),
+                {"s": session_id},
+            ).fetchone()
+            count = conn.execute(
+                text("SELECT COUNT(*) FROM history WHERE session_id = :s"),
+                {"s": session_id},
+            ).fetchone()
+        return {
+            "compressed_upto": int(row[0]) if row else 0,
+            "compressed_at": row[1] if row else None,
+            "messages": int(count[0]) if count else 0,
+        }
+
+    def mark_compressed(self, session_id: str, upto: int) -> None:
+        with self.engine.begin() as conn:
+            conn.execute(
+                self.sessions_table.update()
+                .where(self.sessions_table.c.session_id == session_id)
+                .values(compressed_upto=upto,
+                        compressed_at=datetime.datetime.now().isoformat())
+            )
+
     def get_messages(self, session_id: str, limit: int = 200) -> list:
         """Full transcript for one session, oldest first, for rehydrating the UI."""
         with self.engine.connect() as conn:
@@ -255,12 +292,17 @@ class VectorMemory:
         else:
             raise Exception(f"Failed to get embedding from Ollama: {resp.text}")
 
-    def add_memory(self, logic_content: str, metadata: dict = None):
+    def add_memory(self, logic_content: str, metadata: dict = None, doc_id: str | None = None):
+        """Store one distilled memory.
+
+        `doc_id` is supplied by the caller when re-compressing the same session, so an
+        upsert overwrites the previous note instead of piling duplicates into the index.
+        """
         if metadata is None: metadata = {}
         metadata["timestamp"] = datetime.datetime.now().isoformat()
         metadata["text"] = logic_content # Pinecone needs text in metadata to retrieve it
-        
-        doc_id = str(uuid.uuid4())
+
+        doc_id = doc_id or str(uuid.uuid4())
         
         if self.is_pinecone:
             vector = self._get_embedding(logic_content)
@@ -272,10 +314,17 @@ class VectorMemory:
                 ids=[doc_id]
             )
 
-    def search_memory(self, query: str, n_results: int = 3) -> list:
+    def search_memory(self, query: str, n_results: int = 3, data_source: str | None = None) -> list:
+        """Recall notes for a question, optionally scoped to one database.
+
+        Scoping matters: a note about "revenue" written while connected to one database
+        is not evidence about another, and unrelated notes in the prompt are noise the
+        model has to ignore.
+        """
         if self.is_pinecone:
             vector = self._get_embedding(query)
-            results = self.index.query(vector=vector, top_k=n_results, include_metadata=True)
+            flt = {"data_source": {"$eq": data_source}} if data_source else None
+            results = self.index.query(vector=vector, top_k=n_results, include_metadata=True, filter=flt)
             if not results.matches:
                 return []
             # Return a list of texts
@@ -283,7 +332,8 @@ class VectorMemory:
         else:
             if self.collection.count() == 0: return []
             actual_n = min(n_results, self.collection.count())
-            results = self.collection.query(query_texts=[query], n_results=actual_n)
+            where = {"data_source": data_source} if data_source else None
+            results = self.collection.query(query_texts=[query], n_results=actual_n, where=where)
             
             if not results["documents"] or not results["documents"][0]:
                 return []

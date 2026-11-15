@@ -7,7 +7,7 @@ import time
 from src.core import tracing
 from src.core.memory_manager import SQLiteMemory, VectorMemory
 from src.core.semantic_registry import SemanticRegistry, format_violations
-from src.agents.compression_agent import compress_session_memory
+from src.agents.compression_agent import compress_in_background
 
 # ── Chat-cleanliness guard ────────────────────────────────────────────────────
 # Code must live ONLY in the "Generated Script" pane. The model is told not to
@@ -522,7 +522,11 @@ def _run_agent_turns(user_message, session_id, client, tools_schema, tool_map,
         
     try:
         recalled_memories = (
-            vector_mem.search_memory(user_message, n_results=1) if vector_mem else []
+            vector_mem.search_memory(
+                user_message,
+                n_results=1,
+                data_source=getattr(data_source, "label", None) if data_source else None,
+            ) if vector_mem else []
         )
     except Exception:
         recalled_memories = []
@@ -731,6 +735,17 @@ def _run_agent_turns(user_message, session_id, client, tools_schema, tool_map,
         sqlite_mem.add_message(session_id, "assistant", final_text)
     except Exception:
         pass
+
+    # Distillation runs off the request path: the user already has the answer, and a
+    # summarisation failure must not surface as a failed turn. Skipped in benchmark
+    # mode, where every question is an independent task and no memory is wanted.
+    if os.getenv("AGENT_PROMPT", "").lower() != "bird":
+        try:
+            compress_in_background(
+                session_id, data_source=getattr(data_source, "label", None) if data_source else None
+            )
+        except Exception:
+            pass
     
     exec_time = time.time() - start_time
     # Reported to callers without widening the return signature. The dict wins
