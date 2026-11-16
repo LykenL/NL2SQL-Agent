@@ -92,6 +92,13 @@ def create_agent_tools(db_uri: str = None, source: DataSource = None,
         except Exception as exc:
             return f"Error extracting schema: {exc}"
 
+    def list_tables() -> str:
+        """Compact catalogue — table names and column counts, no columns."""
+        try:
+            return ds.table_index()
+        except Exception as exc:
+            return f"Error listing tables: {type(exc).__name__}: {exc}"
+
     def describe_table(table: str) -> str:
         try:
             return ds.describe(table)
@@ -163,6 +170,17 @@ def create_agent_tools(db_uri: str = None, source: DataSource = None,
         {
             "type": "function",
             "function": {
+                "name": "list_tables",
+                "description": ("Compact catalogue of every table: name, column count and a one-line "
+                                "description. Start here when you do not know what exists, then call "
+                                "describe_table for the tables you actually need. Far cheaper than "
+                                "fetching the whole schema."),
+                "parameters": {"type": "object", "properties": {}, "required": []},
+            }
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "describe_table",
                 "description": "Returns the columns (name, type, description, partition/cluster keys) of ONE table. Cheaper than dumping the whole schema.",
                 "parameters": {
@@ -221,6 +239,7 @@ def create_agent_tools(db_uri: str = None, source: DataSource = None,
 
     tool_map = {
         "get_database_schema": get_database_schema,
+        "list_tables": list_tables,
         "describe_table": describe_table,
         "run_query": run_query,
         "execute_python_code": execute_python_code,

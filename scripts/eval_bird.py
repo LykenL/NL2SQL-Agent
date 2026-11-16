@@ -243,19 +243,20 @@ def build_question(row: dict) -> str:
 
 
 # ── one question -------------------------------------------------------------
-def _isolated_worker(row: dict, sql_timeout: float, queue) -> None:
+def _isolated_worker(row: dict, sql_timeout: float, queue, worker=None) -> None:
     """Run one question in its own process so a stuck run can actually be stopped.
 
     Module level and taking plain values: spawn pickles the target, so a closure or
-    lambda cannot be passed.
+    lambda cannot be passed. `worker` exists so tests can exercise the deadline without
+    running an agent turn (a unit test must not call the model or touch the real store).
     """
     try:
-        queue.put((True, evaluate_one(row, sql_timeout)))
+        queue.put((True, (worker or evaluate_one)(row, sql_timeout)))
     except Exception as exc:  # a crash is one failed question, not a lost run
         queue.put((False, repr(exc)[:300]))
 
 
-def run_with_deadline(row: dict, sql_timeout: float, timeout: float) -> tuple[str, Any]:
+def run_with_deadline(row: dict, sql_timeout: float, timeout: float, worker=None) -> tuple[str, Any]:
     """Run fn(row) in a child process; returns (status, value).
 
     Threads cannot be killed, so a question that never returns would be abandoned
@@ -268,7 +269,7 @@ def run_with_deadline(row: dict, sql_timeout: float, timeout: float) -> tuple[st
     """
     ctx = mp.get_context("spawn")
     queue = ctx.Queue()
-    proc = ctx.Process(target=_isolated_worker, args=(row, sql_timeout, queue), daemon=True)
+    proc = ctx.Process(target=_isolated_worker, args=(row, sql_timeout, queue, worker), daemon=True)
     proc.start()
     proc.join(timeout)
     if proc.is_alive():

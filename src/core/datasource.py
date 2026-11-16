@@ -56,6 +56,28 @@ class DataSource:
     def schema_json(self) -> str:
         raise NotImplementedError
 
+    def table_index(self) -> str:
+        """A compact catalogue: one line per table, no columns.
+
+        The full schema is the single largest thing the agent ever receives, and it is
+        the one payload where losing the middle is not a formatting issue but a factual
+        one: a table the model cannot see is a table it will invent. This index always
+        fits, and `describe_table` opens one entry on demand.
+        """
+        schema = json.loads(self.schema_json())
+        lines = []
+        for name, entry in schema.items():
+            columns = entry.get("columns") or []
+            note = (entry.get("description") or "").strip().replace("\n", " ")
+            if len(note) > 90:
+                note = note[:87] + "..."
+            line = f"{name}  ({len(columns)} columns)"
+            if note:
+                line += f" — {note}"
+            lines.append(line)
+        header = f"{len(lines)} tables in {self.label}"
+        return header + "\n" + "\n".join(lines)
+
     def describe(self, table: str) -> str:
         """Cheap, no-query description of one table (from the cached schema)."""
         schema = json.loads(self.schema_json())

@@ -162,7 +162,8 @@ def test_source_from_spec_parses_project_dataset():
 def test_tools_include_estimate_and_no_uri(bq):
     tools, tool_map = create_agent_tools(source=bq)
     names = [t["function"]["name"] for t in tools]
-    assert names == ["get_database_schema", "describe_table", "estimate_query", "run_query", "execute_python_code"]
+    assert names == ["get_database_schema", "list_tables", "estimate_query",
+                     "describe_table", "run_query", "execute_python_code"]
 
     out = tool_map["estimate_query"]("SELECT * FROM orders")
     assert "Estimated scan" in out and "OVER BUDGET" in out

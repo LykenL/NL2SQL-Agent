@@ -11,6 +11,10 @@ Two mechanisms are needed together:
     segfaults the child on macOS (exit code -11, empty queue, no traceback).
   - the child target must be module level and take plain values, because spawn
     pickles it; a closure or lambda fails with "Can't get local object".
+
+These tests inject their own worker. An earlier version drove the real evaluate_one,
+which meant every `pytest` run made live model calls and wrote `bird_-1_*` sessions into
+the production database.
 """
 import os
 import sys
@@ -19,39 +23,48 @@ import time
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
-from eval_bird import _isolated_worker, run_with_deadline  # noqa: E402
-
-# A row that evaluate_one can score without touching a database or the model:
-# a valid gold SQL and an identical prediction means "correct", so the happy path
-# is exercised end to end in a child process.
-_TRIVIAL = {
-    "id": -1, "db": "student_club", "difficulty": "simple",
-    "question": "How many rows are in the one-row table?", "evidence": "",
-    "sql": "SELECT 1",
-}
+from eval_bird import run_with_deadline  # noqa: E402
 
 
-def test_isolated_worker_runs_a_real_question():
-    status, value = run_with_deadline(dict(_TRIVIAL), 12.0, timeout=120)
-    assert status == "ok", value
-    assert isinstance(value, dict)
+def _fast(row, sql_timeout):
+    return {"id": row.get("id"), "ok": True}
 
 
-def test_hung_question_is_cut_off_and_reported():
-    # a question whose work outlives its deadline must come back as "timeout",
-    # not block until the work finishes
+def _hang(row, sql_timeout):
+    time.sleep(60)
+    return {"id": row.get("id"), "ok": True}
+
+
+def _boom(row, sql_timeout):
+    raise RuntimeError("worker exploded")
+
+
+def test_fast_worker_returns_its_result():
+    status, value = run_with_deadline({"id": 1}, 12.0, timeout=60, worker=_fast)
+    assert status == "ok"
+    assert value == {"id": 1, "ok": True}
+
+
+def test_hung_worker_is_killed_at_the_deadline():
     start = time.time()
-    status, value = run_with_deadline(dict(_TRIVIAL), 12.0, timeout=0.3)
+    status, value = run_with_deadline({"id": 2}, 12.0, timeout=2, worker=_hang)
     elapsed = time.time() - start
     assert status == "timeout"
     assert value is None
     assert elapsed < 30, f"deadline not enforced ({elapsed:.1f}s)"
 
 
-def test_worker_failure_is_returned_not_raised():
-    # a malformed row makes evaluate_one raise; that must come back as data
-    status, value = run_with_deadline({"id": 1}, 12.0, timeout=120)
-    assert status in {"ok", "error"}
-    if status == "error":
-        assert isinstance(value, str) and value
-    assert _isolated_worker is not None
+def test_worker_crash_is_reported_not_raised():
+    status, value = run_with_deadline({"id": 3}, 12.0, timeout=60, worker=_boom)
+    assert status == "error"
+    assert "worker exploded" in value
+
+
+def test_child_accepts_an_injected_worker():
+    """Guards the regression: the real worker calls the model and writes memory."""
+    import inspect
+
+    from eval_bird import _isolated_worker
+
+    src = inspect.getsource(_isolated_worker)
+    assert "worker or evaluate_one" in src

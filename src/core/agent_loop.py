@@ -69,8 +69,21 @@ def _tool_input(name: str, args: dict) -> dict:
 # re-sent on every later turn: one 5,000-row query costs that many tokens times the
 # number of remaining iterations. A blind run died at 1.88M tokens of request
 # context, more than double DeepSeek's 1,048,576 limit, purely from this.
-_MAX_TOOL_CONTENT = 6000        # chars kept from any single tool result
+# Per-result budgets, by what the result is rather than one global number.
+#
+# The single 6000 limit treated four different payloads identically, and in the one case
+# where it hurt it hurt badly: a schema's middle is not formatting, it is the list of
+# tables and columns that exist. Clipping it made the model believe a table was absent and
+# invent one. Reference data gets a budget it will not realistically exceed; previews and
+# stdout keep a small one, since their head and tail carry the signal.
+_SCHEMA_TOOLS = {"get_database_schema", "list_tables", "describe_table"}
+_MAX_SCHEMA_CONTENT = 40_000    # ~10k tokens; a 30-table catalogue is ~1.5k
+_MAX_TOOL_CONTENT = 6000        # query previews, stdout, tool chatter
 _MAX_CONTEXT_CHARS = 240_000    # rough budget for everything but the system turn
+
+
+def _clip_limit(tool_name: str) -> int:
+    return _MAX_SCHEMA_CONTENT if tool_name in _SCHEMA_TOOLS else _MAX_TOOL_CONTENT
 
 
 def _clip_tool_content(text: str, limit: int = _MAX_TOOL_CONTENT) -> str:
@@ -97,10 +110,18 @@ def _trim_history(messages: list, budget: int = _MAX_CONTEXT_CHARS) -> None:
     """
     if sum(len(str(m.get("content") or "")) for m in messages) <= budget:
         return
-    # position 0 is the system turn; keep the newest half and elide the rest
+
+    # Schema results are reference data: a table the model can no longer see is a table
+    # it will invent. Elide the oldest query previews and stdout first, and only touch
+    # schema output if nothing else is left to give up.
+    def _is_schema(m) -> bool:
+        return m.get("name") in _SCHEMA_TOOLS
+
     elidable = [i for i, m in enumerate(messages) if i > 0 and m.get("role") == "tool"]
-    keep_from = len(elidable) // 2
-    for i in elidable[:keep_from]:
+    elidable.sort(key=lambda i: (_is_schema(messages[i]), i))
+
+    keep = len(elidable) // 2
+    for i in elidable[:-keep] if keep else elidable:
         m = messages[i]
         content = str(m.get("content") or "")
         if content.startswith("[earlier result elided"):
@@ -308,9 +329,14 @@ def run_agent_loop(
 
     _PRODUCT_SYSTEM_INSTRUCTION = """You are a Multi-Agent Database Copilot and Data Scientist.
 You have access to tools to fetch the database schema and execute Python code.
-1. ALWAYS use the `get_database_schema` tool first to understand the tables.
+1. Understand the tables before writing SQL — do not dump the whole schema blindly.
+   - No table names yet: call `list_tables` (compact catalogue) or `get_database_schema`
+     when the database is small.
+   - Known which tables matter: call `describe_table` for just those.
+   - NEVER assume a column exists because it seems obvious. A fabricated column is the
+     most common crash.
 2. Write Python code using pandas and SQLAlchemy to query the database.
-   NEVER assume column names. Use ONLY the identifiers returned by get_database_schema; a fabricated `id`/`name`/`amount` column is the most common crash. Before any groupby/agg/merge/rename, check `df.columns` and build the aggregation from real names, e.g. `.agg(total=('<real_amount_col>', 'sum'))` — never `.agg({'id': 'count'})`.
+   NEVER assume column names. Use ONLY identifiers returned by the schema tools; a fabricated `id`/`name`/`amount` column is the most common crash. Before any groupby/agg/merge/rename, check `df.columns` and build the aggregation from real names, e.g. `.agg(total=('<real_amount_col>', 'sum'))` — never `.agg({'id': 'count'})`.
 3. ALWAYS use the `execute_python_code` tool to run your code and see the result.
 4. If the code fails, read the error message, fix your code, and try again.
 5. NEVER write INSERT, UPDATE, DELETE, or DROP statements. Only SELECT.
@@ -686,7 +712,7 @@ def _run_agent_turns(user_message, session_id, client, tools_schema, tool_map,
                     res = "Tool not found"
                 tool_results_history.append(str(res))
                 messages.append({"role": "tool", "tool_call_id": t.id, "name": fname,
-                                 "content": _clip_tool_content(str(res))})
+                                 "content": _clip_tool_content(str(res), _clip_limit(fname))})
                 if fname == "submit_query":
                     # The submission is the answer; further exploration would only
                     # add cost and could replace the scored query.
