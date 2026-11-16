@@ -5,6 +5,7 @@ import json
 import uuid
 import time
 from src.core import tracing
+from src.agents.summarizer import summarize_in_background
 from src.core.memory_manager import SQLiteMemory
 from src.core.semantic_registry import SemanticRegistry, format_violations
 
@@ -510,18 +511,28 @@ def _run_agent_turns(user_message, session_id, client, tools_schema, tool_map,
     ctx = traced_ctx if hasattr(traced_ctx, "to_trace_context") else _NullTraceCtx()
     messages = [{"role": "system", "content": system_instruction}]
     # Memory is best-effort: a dropped database connection is not an answer.
+    #
+    # A long conversation is replayed as (brief of older turns) + (newest turns), so the
+    # opening context is not lost just because it no longer fits. Storage keeps the full
+    # transcript; only what is replayed is bounded.
     try:
-        history = sqlite_mem.get_recent_context(session_id, limit=10)
+        context = sqlite_mem.context_for_prompt(session_id, recent=6)
     except Exception:
-        history = []
-    for msg in history:
+        context = {"summary": "", "messages": []}
+
+    if context.get("summary"):
+        messages.append({
+            "role": "user",
+            "content": "[Earlier in this conversation — brief]\n" + context["summary"],
+        })
+
+    for msg in context.get("messages", []):
         # Old rows were stored before the no-code rule existed; never replay a
         # script back into the context, otherwise the model imitates it.
         content = msg["content"]
         if msg["role"] in ("assistant", "model"):
             content = strip_code_fences(content)
         messages.append({"role": msg["role"], "content": content})
-        
     try:
         # Register the session and stamp it with the source it is about, so the
         # sidebar can list and filter conversations.
@@ -723,6 +734,14 @@ def _run_agent_turns(user_message, session_id, client, tools_schema, tool_map,
         sqlite_mem.add_message(session_id, "assistant", final_text)
     except Exception:
         pass
+
+    # Fold this turn into the session brief, off the request path. Skipped in benchmark
+    # mode: questions there are independent, and a brief for each one is pure cost.
+    if os.getenv("AGENT_PROMPT", "").lower() != "bird":
+        try:
+            summarize_in_background(session_id, memory=sqlite_mem)
+        except Exception:
+            pass
 
 
     exec_time = time.time() - start_time

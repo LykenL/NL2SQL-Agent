@@ -47,6 +47,9 @@ class DatabaseMemory:
             # and pay for the same summarisation twice.
             Column('compressed_upto', Integer, default=0),
             Column('compressed_at', String),
+            # Rolling brief of the turns already compressed. The transcript itself is
+            # never deleted — this only changes what gets replayed into the prompt.
+            Column('summary', String),
         )
 
         self.metadata.create_all(self.engine)
@@ -69,6 +72,7 @@ class DatabaseMemory:
             ("data_source", "ALTER TABLE sessions ADD COLUMN data_source VARCHAR"),
             ("compressed_upto", "ALTER TABLE sessions ADD COLUMN compressed_upto INTEGER DEFAULT 0"),
             ("compressed_at", "ALTER TABLE sessions ADD COLUMN compressed_at VARCHAR"),
+            ("summary", "ALTER TABLE sessions ADD COLUMN summary TEXT"),
         ):
             if column not in existing:
                 try:
@@ -244,6 +248,44 @@ class DatabaseMemory:
                 .values(compressed_upto=upto,
                         compressed_at=datetime.datetime.now().isoformat())
             )
+
+    def get_summary(self, session_id: str) -> str:
+        """The rolling brief of turns already compressed, or ""."""
+        with self.engine.connect() as conn:
+            row = conn.execute(
+                text("SELECT summary FROM sessions WHERE session_id = :s"),
+                {"s": session_id},
+            ).fetchone()
+        return (row[0] or "") if row else ""
+
+    def set_summary(self, session_id: str, summary: str, upto: int) -> None:
+        """Store the brief and the message count it covers, in one write."""
+        with self.engine.begin() as conn:
+            conn.execute(
+                self.sessions_table.update()
+                .where(self.sessions_table.c.session_id == session_id)
+                .values(summary=summary,
+                        compressed_upto=upto,
+                        compressed_at=datetime.datetime.now().isoformat())
+            )
+
+    def context_for_prompt(self, session_id: str, recent: int = 6) -> dict:
+        """What the model should see of this conversation: brief + latest turns.
+
+        The transcript is never truncated in storage; this only decides what is replayed.
+        Below the compression threshold the brief is empty and this behaves like the old
+        "last N messages" read.
+        """
+        state = self.compression_state(session_id)
+        upto = state["compressed_upto"]
+        messages = self.get_messages(session_id, limit=2000)
+        tail = messages[upto:][-recent:] if upto else messages[-recent:]
+        return {
+            "summary": self.get_summary(session_id),
+            "messages": tail,
+            "compressed_upto": upto,
+            "total_messages": len(messages),
+        }
 
     def get_messages(self, session_id: str, limit: int = 200) -> list:
         """Full transcript for one session, oldest first, for rehydrating the UI."""
