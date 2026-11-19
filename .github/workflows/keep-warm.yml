@@ -1,0 +1,19 @@
+name: keep-warm
+
+on:
+  schedule:
+    - cron: "*/10 14-23 * * 1-5" # Every 10 minutes, UTC 14:00-23:59 Mon-Fri = North American work hours (ET 9:00-18:00 / MT 7:00-16:00 / PT 6:00-15:00 standard time; no DST adjustment, matching refresh.yml's fixed-UTC style).
+  workflow_dispatch:
+
+concurrency:
+  group: keep-warm
+  cancel-in-progress: false
+
+jobs:
+  keep-warm:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wake Render backend
+        # A timeout or non-200 during cold start is expected; waking the instance is the goal.
+        continue-on-error: true
+        run: curl -sS --max-time 60 -o /dev/null -w '%{http_code}\n' https://nl2sql-agent-0hwl.onrender.com/api/health
