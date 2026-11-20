@@ -23,9 +23,12 @@ from __future__ import annotations
 
 import contextlib
 import os
+import threading
 from typing import Any, Iterator, Optional
 
 _TRUTHY = {"1", "true", "yes", "on"}
+_client_instance: Optional[Any] = None
+_client_lock = threading.Lock()
 
 
 def host() -> str:
@@ -48,24 +51,22 @@ def enabled() -> bool:
 def client() -> Optional[Any]:
     """The Langfuse client, or None. Never raises: a broken tracer must not
     take down a request."""
+    global _client_instance
     if not enabled():
         return None
+    if _client_instance is not None:
+        return _client_instance
     try:
-        from langfuse import get_client
+        from langfuse import Langfuse
 
-        # get_client() only returns a client that was already initialised (the
-        # SDK does that when traced code runs). A CLI script has no request that
-        # triggered it, so it is created here on first use and reused after.
-        try:
-            return get_client(public_key=os.getenv("LANGFUSE_PUBLIC_KEY"))
-        except Exception:
-            from langfuse import Langfuse
-
-            return Langfuse(
-                public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
-                secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
-                host=host(),
-            )
+        with _client_lock:
+            if _client_instance is None:
+                _client_instance = Langfuse(
+                    public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
+                    secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
+                    host=host(),
+                )
+        return _client_instance
     except Exception as exc:  # pragma: no cover - only with a broken install
         print(f"[tracing] disabled: {type(exc).__name__}: {exc}")
         return None
@@ -172,7 +173,6 @@ def openai_client() -> Any:
     return OpenAI(**kwargs)
 
 
-@contextlib.contextmanager
 def current_context(observation: Any) -> Any:
     """The OTel context an observation lives in, so children take the same trace.
 
@@ -204,7 +204,6 @@ class _Context:
         return TraceContext(trace_id=self.trace_id, parent_span_id=self.parent_span_id)
 
 
-@contextlib.contextmanager
 def otel_context(observation: Any) -> Any:
     """A TraceContext pinned to this observation, usable from any thread.
 

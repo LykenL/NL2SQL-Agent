@@ -625,7 +625,10 @@ def _run_agent_turns(user_message, session_id, client, tools_schema, tool_map,
         _call_kwargs = {"name": "agent-step"} if tracing.enabled() else {}
         _tc = ctx.to_trace_context()
         if _tc is not None:
-            _call_kwargs["trace_context"] = _tc
+            # Langfuse 5's OpenAI wrapper accepts these reserved kwargs, not
+            # the TraceContext dict used by start_as_current_observation.
+            _call_kwargs["trace_id"] = _tc["trace_id"]
+            _call_kwargs["parent_observation_id"] = _tc["parent_span_id"]
         # Effort control only applies when thinking is on; DeepSeek ignores it
         # otherwise, so it is sent only in that case.
         _effort = tracing.reasoning_effort()
