@@ -18,6 +18,7 @@ can alert on failure.
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -26,6 +27,18 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DEFS = ROOT / "pipelines" / "definitions.py"
 BRONZE_SELECT = "kolada_municipalities,kolada_kpi_catalog,kolada_kpi_values"
+
+
+def _tool(name: str) -> str:
+    # Starting a venv's Python by absolute path does not put its bin on PATH.
+    candidate = Path(sys.executable).parent / name
+    if candidate.is_file() and os.access(candidate, os.X_OK):
+        return str(candidate.resolve())
+
+    path = shutil.which(name)
+    if path is None:
+        raise SystemExit(f"Required executable not found: {name}")
+    return str(Path(path).resolve())
 
 
 def run(title: str, cmd: list[str], cwd: Path | None = None, env: dict | None = None) -> None:
@@ -48,16 +61,16 @@ def main() -> int:
     dbt_env.setdefault("DBT_PROFILES_DIR", str(ROOT / "dbt"))
 
     run("1/4 ingest (Kolada → bronze)",
-        ["dagster", "asset", "materialize", "-f", str(DEFS), "--select", BRONZE_SELECT])
+        [_tool("dagster"), "asset", "materialize", "-f", str(DEFS), "--select", BRONZE_SELECT])
 
     run("2/4 dbt build (silver + gold + tests)",
-        ["dbt", "build", "--fail-fast"], cwd=ROOT / "dbt", env=dbt_env)
+        [_tool("dbt"), "build", "--fail-fast"], cwd=ROOT / "dbt", env=dbt_env)
 
     run("3/4 dq ledger",
-        ["dagster", "asset", "materialize", "-f", str(DEFS), "--select", "dq_results"])
+        [_tool("dagster"), "asset", "materialize", "-f", str(DEFS), "--select", "dq_results"])
 
     run("4/4 dq gate",
-        ["dagster", "asset", "materialize", "-f", str(DEFS), "--select", "dq_gate"])
+        [_tool("dagster"), "asset", "materialize", "-f", str(DEFS), "--select", "dq_gate"])
 
     print("\nrefresh complete", flush=True)
     return 0

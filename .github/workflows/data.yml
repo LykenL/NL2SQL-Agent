@@ -84,6 +84,9 @@ jobs:
       - name: Check requirements.lock.txt is current
         run: uv export --frozen --no-hashes --no-dev --no-emit-project --no-header -o /tmp/requirements.lock.txt && diff -u requirements.lock.txt /tmp/requirements.lock.txt
 
+      - name: Check requirements.pipelines.lock.txt is current
+        run: uv export --frozen --no-hashes --no-dev --no-emit-project --no-header --extra pipelines -o /tmp/requirements.pipelines.lock.txt && diff -u requirements.pipelines.lock.txt /tmp/requirements.pipelines.lock.txt
+
       - name: Sync from the lockfile
         run: uv sync --locked --all-extras
 

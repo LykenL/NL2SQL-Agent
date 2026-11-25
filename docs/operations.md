@@ -12,7 +12,7 @@ Kolada API ──ingest──► bronze ──dbt staging──► silver ──
                                           Copilot（只能读 gold）─────┘
 ```
 
-一条命令刷新全部（本地或 Render Cron）：
+本地一条命令刷新全部：
 
 ```bash
 python scripts/refresh.py
@@ -61,7 +61,7 @@ python scripts/refresh.py
 
 选择它而不是 Render Cron Job 的原因：Render 的 Free 实例类型**不支持** Cron Job，最低要付费档（约 $7/月级，虽按秒计费但需绑卡）；Actions 对 public 仓库免费，且 `GCP_SA_JSON` 已经配好。
 
-流程：写 key → `python scripts/refresh.py` → 断言 `mart_freshness` 行数非零。
+流程：写 key → `bash scripts/install_deps.sh --pipelines` → `.venv/bin/python scripts/refresh.py` → 断言 `mart_freshness` 行数非零。
 workspace 的 `BQ_PREFIX` 必须是 `data_copilot_dev`，否则 `/health` 会一直显示旧数据。
 
 已知限制：GitHub 的 schedule 在高峰期可能延迟几分钟到十几分钟（日更无影响）；仓库连续 60 天没有提交时定时任务会被自动停用，有一次提交即可恢复。
@@ -73,9 +73,10 @@ workspace 的 `BQ_PREFIX` 必须是 `data_copilot_dev`，否则 `/health` 会一
 | Type | Cron Job |
 | Repo / Branch | `LykenL/NL2SQL-Agent` · `main` |
 | Schedule | `0 6 * * *`（每天 06:00 UTC） |
-| Command | `python scripts/refresh.py` |
+| Command | `.venv/bin/python scripts/refresh.py`（依赖安装在 `.venv` 中；旧的 `python scripts/refresh.py` 会使用主机解释器，无法加载 `.venv` 里的管道依赖） |
+| Build Command | `bash scripts/install_deps.sh --pipelines`（安装基础与管道依赖到 `.venv`） |
 | Env | `BQ_PROJECT`、`BQ_PREFIX=data_copilot_dev`，以及 Secret File 挂载的 `GOOGLE_APPLICATION_CREDENTIALS` |
-| 依赖 | Render Web Service 的 Build Command：`bash scripts/install_deps.sh`（仓库有 `uv.lock` 时 Render 会自动提供 uv；pip 回退：`bash scripts/install_deps.sh --pip`，同样创建 `.venv`）。Start Command：`.venv/bin/uvicorn src.backend.server:app --host 0.0.0.0 --port $PORT`。此脚本只安装服务基础依赖；Cron 刷新仍需 `pipelines-requirements.txt` |
+| Web Service | Build Command：`bash scripts/install_deps.sh`（仓库有 `uv.lock` 时 Render 会自动提供 uv；pip 回退：`bash scripts/install_deps.sh --pip`，同样创建 `.venv`）。Start Command：`.venv/bin/uvicorn src.backend.server:app --host 0.0.0.0 --port $PORT`。此脚本只安装服务基础依赖。 |
 
 Cron 使用**只读**的 `copilot-reader` 是不行的——它需要写 bronze/silver/gold。两种做法：
 

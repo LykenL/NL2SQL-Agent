@@ -64,7 +64,7 @@ api/index.py                placeholder response; not the FastAPI application
 
 Python 3.12 is used by CI. From the repository root:
 
-`bash scripts/install_deps.sh` installs the locked base dependencies from `uv.lock` into `.venv` when uv is available; `bash scripts/install_deps.sh --pip` uses the pinned `requirements.lock.txt` and also installs into `.venv`.
+`bash scripts/install_deps.sh` installs the locked base dependencies from `uv.lock` into `.venv` when uv is available; `bash scripts/install_deps.sh --pip` uses the pinned `requirements.lock.txt` and also installs into `.venv`; add `--pipelines` for the warehouse/refresh path to install the pipeline stack as well (with `--pip`, it uses `requirements.pipelines.lock.txt`).
 
 ```bash
 python3.12 -m venv .venv
