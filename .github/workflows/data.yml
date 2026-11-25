@@ -81,6 +81,7 @@ jobs:
       - name: Verify the manifest and lock
         run: uv lock --check
 
+      # Local equivalent: `bash scripts/export_requirements.sh`.
       - name: Check requirements.lock.txt is current
         run: uv export --frozen --no-hashes --no-dev --no-emit-project --no-header -o /tmp/requirements.lock.txt && diff -u requirements.lock.txt /tmp/requirements.lock.txt
 

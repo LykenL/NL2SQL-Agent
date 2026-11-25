@@ -78,6 +78,8 @@ workspace 的 `BQ_PREFIX` 必须是 `data_copilot_dev`，否则 `/health` 会一
 | Env | `BQ_PROJECT`、`BQ_PREFIX=data_copilot_dev`，以及 Secret File 挂载的 `GOOGLE_APPLICATION_CREDENTIALS` |
 | Web Service | Build Command：`bash scripts/install_deps.sh`（仓库有 `uv.lock` 时 Render 会自动提供 uv；pip 回退：`bash scripts/install_deps.sh --pip`，同样创建 `.venv`）。Start Command：`.venv/bin/uvicorn src.backend.server:app --host 0.0.0.0 --port $PORT`。此脚本只安装服务基础依赖。 |
 
+编辑依赖后先运行 `uv lock`，再运行 `bash scripts/export_requirements.sh`；否则 CI 的 lockfile 检查会失败。
+
 Cron 使用**只读**的 `copilot-reader` 是不行的——它需要写 bronze/silver/gold。两种做法：
 
 1. 给 `copilot-reader` 加 `dataEditor`（简单，但线上服务就有了写权限，不推荐）；
