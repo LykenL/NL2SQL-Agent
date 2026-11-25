@@ -75,7 +75,7 @@ workspace 的 `BQ_PREFIX` 必须是 `data_copilot_dev`，否则 `/health` 会一
 | Schedule | `0 6 * * *`（每天 06:00 UTC） |
 | Command | `python scripts/refresh.py` |
 | Env | `BQ_PROJECT`、`BQ_PREFIX=data_copilot_dev`，以及 Secret File 挂载的 `GOOGLE_APPLICATION_CREDENTIALS` |
-| 依赖 | `pipelines-requirements.txt` 需在构建命令里安装（Build Command: `pip install -r backend-requirements.txt -r pipelines-requirements.txt`） |
+| 依赖 | Render Web Service 的 Build Command：`bash scripts/install_deps.sh`（pip 回退：`bash scripts/install_deps.sh --pip`）；走 uv 路径时，Start Command 应为 `.venv/bin/uvicorn src.backend.server:app --host 0.0.0.0 --port $PORT`。此脚本只安装服务基础依赖；Cron 刷新仍需 `pipelines-requirements.txt` |
 
 Cron 使用**只读**的 `copilot-reader` 是不行的——它需要写 bronze/silver/gold。两种做法：
 

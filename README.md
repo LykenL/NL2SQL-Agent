@@ -64,6 +64,8 @@ api/index.py                placeholder response; not the FastAPI application
 
 Python 3.12 is used by CI. From the repository root:
 
+`bash scripts/install_deps.sh` installs from `uv.lock`; use `bash scripts/install_deps.sh --pip` to fall back to the pinned `requirements.lock.txt`.
+
 ```bash
 python3.12 -m venv .venv
 source .venv/bin/activate
