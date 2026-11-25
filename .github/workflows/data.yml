@@ -63,6 +63,30 @@ jobs:
           cd dbt
           tail -n 60 logs/dbt.log || true
 
+  lockfile:
+    name: uv lockfile
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Check requirements and pyproject agree
+        run: python3 scripts/check_dependency_parity.py
+
+      - name: Verify the manifest and lock
+        run: uv lock --check
+
+      - name: Sync from the lockfile
+        run: uv sync --locked --all-extras
+
+      - name: Run tests
+        run: uv run --locked pytest tests -q
+
   frontend:
     name: TypeScript
     runs-on: ubuntu-latest
