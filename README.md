@@ -28,7 +28,7 @@ The optional warehouse pipeline defines three Kolada ingestion assets, dbt stagi
 | Data connections | The UI accepts `.db`, `.sqlite`, and `.csv` uploads, a SQLAlchemy database URI, or a BigQuery source exposed by the backend. SQLite, PostgreSQL, and MySQL are handled through SQLAlchemy. A single selected source is used for a chat. |
 | Schema catalogue | The sidebar shows table columns and foreign keys where available. Agent tools provide a compact table index and on-demand table descriptions. BigQuery schema details come from its metadata API. |
 | Charts and scripts | The agent prompt asks for charts for rankings, comparisons, trends, distributions, and shares; scalar lookups do not require one. Plotly and Altair figures are rendered in the canvas, while generated Python is shown separately and can be re-run. Chart generation depends on the model response. |
-| Conversations | Session transcripts are stored server-side, listed, reopened, and deleted. The browser keeps the active session ID in local storage. The prompt uses a rolling summary of older turns plus up to the newest six stored messages; the transcript is not deleted by summarization. The message API returns at most 200 messages by default. There is no cross-session vector recall. |
+| Conversations | Session transcripts are stored server-side, listed, reopened, and deleted. The browser keeps the active session ID in local storage. The prompt uses a rolling summary of older turns plus up to the newest six stored messages; the transcript is not deleted by summarization. The message API returns at most 200 messages by default. |
 | Metric definitions | A local SQLite registry stores draft, confirmed, and stale definitions. Resolution is lexical; confirmed definitions are inserted into the prompt and checked before the agent's Python tool executes. The UI can inspect, resolve, confirm, and mark definitions stale. |
 | BigQuery controls | BigQuery query execution accepts only `SELECT`/`WITH`, rejects write/DDL keywords, and applies a result row limit (default 1,000). The agent also has an estimate tool that performs a dry run and compares the estimate with `BQ_MAX_BYTES`; that estimate is not an unconditional execution gate. |
 | Data health and triage | `GET /api/health/data` returns mart freshness and the latest DQ results; the frontend page `/health` renders this data when BigQuery is reachable. `GET /api/dq/triage` exposes read-only DQ triage with evidence queries and heuristic causes. Without usable BigQuery access, the data-health endpoint reports an unconfigured state. |
@@ -41,8 +41,6 @@ The optional warehouse pipeline defines three Kolada ingestion assets, dbt stagi
 ## Stack
 
 Python 3.12 in CI · FastAPI · SQLAlchemy · pandas · Next.js 16 / React 19 / TypeScript · Tailwind CSS 4 · Plotly · Altair · Dagster · dbt-bigquery · pytest · GitHub Actions
-
-The previous Streamlit UI is not present; `frontend/` is the current application.
 
 ## Layout
 
@@ -83,7 +81,7 @@ npm ci
 npm run dev
 ```
 
-Open the frontend page at <http://localhost:3000>. On a localhost page, the frontend uses `http://localhost:8000` as its API base. Its non-local API fallback is `https://nl2sql-agent-0hwl.onrender.com`; source code does not verify that hosted service's current availability. `NEXT_PUBLIC_API_URL` can override the API base, subject to the frontend's localhost safeguard.
+Open the frontend page at <http://localhost:3000>. On a localhost page the API base is `http://localhost:8000`; on any other host it falls back to `https://nl2sql-agent-0hwl.onrender.com`. `NEXT_PUBLIC_API_URL` overrides the base, but a localhost value is ignored on a non-local page.
 
 The backend loads `.env` from the repository root. `configs/.env.example` contains the example settings. The sample SQL source defaults to `sqlite:///examples/databases/company.db`; `DATABASE_URL` overrides that default. The session store defaults to `data/episodic_memory/memory_episodic.db` and also reads `DATABASE_URL` when set. Alternatively, connect a source in the UI.
 
@@ -115,8 +113,8 @@ It needs the pipeline dependencies, BigQuery credentials/permissions, and the ap
 - Tests: `python -m pytest tests -q` (CI installs `pytest` separately).
 - `.github/workflows/data.yml` runs pytest and `dbt parse --target ci`; when `GCP_SA_JSON` is configured, it also runs a CI-target dbt build. The frontend job runs `npm ci` and `npm run build`.
 - `.github/workflows/refresh.yml` schedules the warehouse refresh daily at 06:00 UTC and checks freshness rows when the job runs. It requires the `GCP_SA_JSON` secret.
-- `.github/workflows/keep-warm.yml` periodically requests `GET /api/health` from the hosted backend on weekdays. This is a workflow definition, not evidence that the external host is currently available.
-- The repository has no Dockerfile or Render/Vercel deployment manifest. `api/index.py` is a placeholder handler, not a second FastAPI entry point.
+- `.github/workflows/keep-warm.yml` requests `GET /api/health` on the hosted backend every 10 minutes during weekday North American working hours.
+- The repository ships no Dockerfile or platform deployment manifest; `api/index.py` is a placeholder handler, not an application entry point.
 
 ## API
 
