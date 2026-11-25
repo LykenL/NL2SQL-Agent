@@ -1,0 +1,37 @@
+[project]
+name = "data-copilot"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "openai",
+    "pandas",
+    "python-dotenv",
+    "sqlalchemy>=2.0.0",
+    "plotly",
+    "altair>=5.0.0",
+    "psycopg2-binary",
+    "psycopg[binary]",
+    "pymysql",
+    "fastapi",
+    "uvicorn",
+    "python-multipart",
+    "requests",
+    "google-cloud-bigquery>=3.25",
+    "sse-starlette",
+    "langfuse>=5,<6",
+    "brotlicffi",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+# Base dependencies already provide pandas, requests, python-dotenv, and
+# google-cloud-bigquery; only add pipeline-specific packages here to avoid drift.
+pipelines = [
+    "dbt-bigquery>=1.8",
+    "dagster>=1.9",
+    "dagster-dbt>=0.25",
+    "dagster-webserver",
+]
+
+[tool.uv]
+package = false
