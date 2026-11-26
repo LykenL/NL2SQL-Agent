@@ -113,3 +113,44 @@ jobs:
       # types during the build, so a plain tsc run cannot see them.
       - name: Build (type checks included)
         run: cd frontend && npm run build
+
+  docker:
+    name: Docker images + stack smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Same Dockerfiles the compose stack builds; `load` keeps the images in the
+      # runner so the smoke test can start them without rebuilding.
+      - name: Build the API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: api
+          load: true
+          tags: data-copilot-api:local
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+      - name: Build the web image
+        uses: docker/build-push-action@v6
+        with:
+          context: frontend
+          load: true
+          tags: data-copilot-web:local
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+
+      # Placeholder keys: these checks never call a model, they only assert the
+      # services answer the way the UI expects.
+      - name: Start the stack and check it
+        run: |
+          cp configs/.env.example .env
+          bash scripts/docker_smoke_test.sh --no-build
+
+      - name: Container logs on failure
+        if: failure()
+        run: docker compose logs --tail 80 api web
