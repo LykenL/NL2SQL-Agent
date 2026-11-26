@@ -1,0 +1,51 @@
+# Production-shaped local stack: a FastAPI container and a Next.js container.
+#
+#   docker compose up -d --build          # build and start
+#   docker compose ps                     # health of both services
+#   docker compose logs -f api            # tail the API
+#   docker compose down                   # stop, keep the data volumes
+#   docker compose down -v                # stop and throw the data away
+#
+# Hot reload is a separate file: docker-compose.dev.yml.
+name: data-copilot
+
+services:
+  api:
+    build:
+      context: .
+      target: api
+    image: data-copilot-api:local
+    # LLM_API_KEY and friends. Optional so a fresh clone can start and serve
+    # /api/health before anyone has filled in a key.
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      PORT: "8000"
+    # Bound to loopback: /api/execute runs arbitrary Python with no auth layer.
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"
+    volumes:
+      # Sessions, metric definitions, uploads. Named volumes so a recreate does
+      # not take them with it, and so the app user can always write to them.
+      - api-data:/app/data
+      - api-uploads:/app/tmp/uploads
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        # Baked into the client bundle. Empty keeps the app's own resolution.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
+    image: data-copilot-web:local
+    ports:
+      - "127.0.0.1:${WEB_PORT:-3000}:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  api-data:
+  api-uploads:

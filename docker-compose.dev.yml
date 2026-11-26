@@ -1,0 +1,32 @@
+# Development override: source is bind-mounted and both servers hot reload.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+#
+# The API image already contains the venv, so only the source changes here; the
+# web image is rebuilt with the `dev` target, which has node_modules and runs
+# `next dev` instead of the standalone server.
+services:
+  api:
+    command:
+      - sh
+      - -c
+      - exec uvicorn src.backend.server:app --host 0.0.0.0 --port 8000 --reload --reload-dir /app/src
+    volumes:
+      - ./src:/app/src:ro
+      - ./configs:/app/configs:ro
+      - ./examples:/app/examples:ro
+      - api-data:/app/data
+      - api-uploads:/app/tmp/uploads
+
+  web:
+    build:
+      context: ./frontend
+      target: dev
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
+    image: data-copilot-web:dev
+    volumes:
+      - ./frontend:/app
+      # Keep the image's node_modules: the host copy is built for the host.
+      - /app/node_modules
+    restart: unless-stopped
