@@ -116,8 +116,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Temp upload directory (created on startup)
-UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "../../../tmp/uploads")
+# Temp upload directory (created on startup). UPLOAD_DIR overrides it; the
+# default sits inside the repository, one level below the source tree, so a
+# container can mount a volume over it and the path never escapes the project.
+_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
+UPLOAD_DIR = os.getenv("UPLOAD_DIR") or os.path.join(_PROJECT_ROOT, "tmp", "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 

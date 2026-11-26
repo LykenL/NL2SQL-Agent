@@ -1,0 +1,43 @@
+# Keep the build context to what the API image copies: source, configs,
+# examples, scripts, dbt. Everything optional or host-specific stays out, so a
+# 600 MB node_modules or a local venv never reaches the daemon.
+
+.git
+.github
+.venv
+venv
+env
+__pycache__
+**/__pycache__
+*.pyc
+.pytest_cache
+
+# The web app has its own image and context.
+frontend
+
+# Not shipped inside the API image.
+archive
+docs
+evals
+tests
+tmp
+data
+chroma_db
+databases
+dbt/target
+dbt/dbt_packages
+dbt/logs
+dagster_home
+.tmp_dagster_home*
+
+# Local state and scratch artefacts.
+.env
+.env.*
+.DS_Store
+*.zip
+company.db
+f1.db
+uploaded_db.sqlite
+dataset.json
+updated_dataset.json
+eda_results.png

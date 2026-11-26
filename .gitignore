@@ -33,6 +33,9 @@ venv/
 # Semantic registry runtime data
 data/semantic/
 
+# Uploaded databases (backend UPLOAD_DIR default, and the docker volume mount)
+tmp/
+
 # dbt artifacts
 dbt/target/
 dbt/dbt_packages/
