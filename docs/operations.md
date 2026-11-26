@@ -66,6 +66,32 @@ workspace 的 `BQ_PREFIX` 必须是 `data_copilot_dev`，否则 `/health` 会一
 
 已知限制：GitHub 的 schedule 在高峰期可能延迟几分钟到十几分钟（日更无影响）；仓库连续 60 天没有提交时定时任务会被自动停用，有一次提交即可恢复。
 
+## Docker（本地与自托管）
+
+仓库自带两个镜像和一套 compose，宿主不需要装 Python 或 Node：
+
+| 文件 | 作用 |
+|---|---|
+| `Dockerfile` | API 镜像：uv 按 `uv.lock` 安装，非 root 运行，`HEALTHCHECK` 打 `/api/health`；`--target pipelines` 额外装 Dagster/dbt |
+| `frontend/Dockerfile` | Next.js 镜像：多阶段构建，产物是 `.next/standalone`，用非 root 跑 `server.js` |
+| `docker-compose.yml` | `api` + `web`，端口只绑 `127.0.0.1`，状态落命名卷 |
+| `docker-compose.dev.yml` | 开发叠加：源码 bind mount，两边热重载 |
+| `scripts/docker_smoke_test.sh` | 构建 → 启动 → 按 UI 的调用顺序断言；CI 的 `docker` job 跑的就是它 |
+
+```bash
+docker compose up -d --build
+bash scripts/docker_smoke_test.sh --no-build                                  # 只跑断言
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build     # 开发
+```
+
+- **开发模式**：`docker-compose.dev.yml` 把 `src/`、`configs/`、`examples/` 和整个 `frontend/` 挂进容器，API 用 `--reload`，前端跑 `next dev`。注意 uvicorn 的 StatReload 只对**已有文件**的改动生效，新建的模块要重启容器；前端同理（Tailwind/Next 的配置改动需要重启）。
+- **端口**：`API_PORT` / `WEB_PORT` 只改宿主端口，容器内固定 8000 / 3000。
+- **数据**：命名卷 `api-data` 挂 `/app/data`（session 库、语义定义），`api-uploads` 挂 `/app/tmp/uploads`（`UPLOAD_DIR` 的默认位置，已收进仓库内的 `tmp/`）。`down` 保留，`down -v` 清空；`.env` 里有 `DATABASE_URL` 时 session 走远端库，不落卷。
+- **密钥**：compose 读根目录 `.env`，文件缺失也能起（`/api/health` 不依赖 key，但 chat 会失败）。`GOOGLE_APPLICATION_CREDENTIALS` 要生效需把密钥文件挂进容器、把路径改成容器内路径。
+- **前端 API 地址**：`NEXT_PUBLIC_API_URL` 是构建期参数（Next 会把 `NEXT_PUBLIC_*` 内联进 bundle）。留空时 localhost 页面调 `http://localhost:8000`，其他 host 回落线上后端；改地址要重新 `docker compose build web`，重启无效。
+- **安全边界**：`/api/execute` 在容器进程里执行任意 Python 且无认证，镜像默认只绑 loopback，不要为了"方便"改成 `0.0.0.0`。
+- **自托管刷新**：`docker build --target pipelines -t data-copilot-pipelines .`，再用 `docker run --rm --env-file .env data-copilot-pipelines .venv/bin/python scripts/refresh.py`；`DAGSTER_HOME` 已指向 `/app/.dagster`，想保留 run 记录就给它挂卷。
+
 ## 备选：Render Cron Job（需付费）
 
 | 字段 | 值 |

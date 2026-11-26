@@ -98,6 +98,49 @@ The backend loads `.env` from the repository root. `configs/.env.example` contai
 | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST` | Optional Langfuse configuration. |
 | `NEXT_PUBLIC_API_URL` | Optional frontend API-base override. |
 
+## Run with Docker
+
+Two images, no host Python or Node needed:
+
+```bash
+cp configs/.env.example .env      # optional: compose starts without it
+docker compose up -d --build
+```
+
+| Service | Container port | Host binding | Health |
+|---|---|---|---|
+| `api` (FastAPI) | 8000 | `127.0.0.1:8000` | `GET /api/health` |
+| `web` (Next.js) | 3000 | `127.0.0.1:3000` | `GET /` |
+
+Both ports are published on loopback only. `/api/execute` runs submitted Python inside the API process and the service has no authentication, so the default binding must not be widened to `0.0.0.0` on a shared network. `API_PORT` and `WEB_PORT` move the host ports without touching the images.
+
+What the images do:
+
+- `Dockerfile` installs from `uv.lock` with uv, the same source `scripts/install_deps.sh` uses, so the container venv cannot drift from the local one. The runtime stage runs as uid 1000, drops the build toolchain, and carries a `HEALTHCHECK` on `/api/health`. `--target pipelines` builds the same image plus the Dagster/dbt extras (`pipelines/`, `DAGSTER_HOME=/app/.dagster`) for `scripts/refresh.py`.
+- `frontend/Dockerfile` builds once and ships `.next/standalone` (why `next.config.ts` sets `output: "standalone"`), then runs `server.js` as an unprivileged user.
+
+State lives in named volumes: `api-data` for `data/` (session store when `DATABASE_URL` is unset, metric definitions) and `api-uploads` for `tmp/uploads` (the backend's `UPLOAD_DIR`). `docker compose down` keeps them; `docker compose down -v` discards them. Because `.env` here sets `DATABASE_URL`, sessions go to that server rather than the volume.
+
+`NEXT_PUBLIC_API_URL` is a build argument because Next inlines `NEXT_PUBLIC_*` into the client bundle. Leaving it empty uses the app's own resolution: pages served from localhost call `http://localhost:8000`, anything else calls the hosted backend. Changing it requires a rebuild, not a restart:
+
+```bash
+NEXT_PUBLIC_API_URL=https://api.example.com docker compose build web
+```
+
+Hot reload, with source bind-mounted and both servers watching:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+```
+
+Verify the stack the way the UI uses it — health, capabilities, CORS for the web origin, the server-rendered page, and the `/_next/static` assets:
+
+```bash
+bash scripts/docker_smoke_test.sh              # build, start, check, tear down
+KEEP=1 bash scripts/docker_smoke_test.sh       # leave it running to poke at it
+bash scripts/docker_smoke_test.sh --no-build   # CI: images already built
+```
+
 ## Refresh the warehouse
 
 The refresh script runs Kolada ingestion, `dbt build`, the DQ ledger asset, and then the DQ gate, stopping on the first failed command:
@@ -116,7 +159,7 @@ It needs the pipeline dependencies, BigQuery credentials/permissions, and the ap
 - `.github/workflows/data.yml` runs pytest and `dbt parse --target ci`; when `GCP_SA_JSON` is configured, it also runs a CI-target dbt build. The frontend job runs `npm ci` and `npm run build`.
 - `.github/workflows/refresh.yml` schedules the warehouse refresh daily at 06:00 UTC and checks freshness rows when the job runs. It requires the `GCP_SA_JSON` secret.
 - `.github/workflows/keep-warm.yml` requests `GET /api/health` on the hosted backend every 10 minutes during weekday North American working hours.
-- The repository ships no Dockerfile or platform deployment manifest; `api/index.py` is a placeholder handler, not an application entry point.
+- Images and containers: `docker compose build` builds the API image from `uv.lock` and the web image from `frontend/package-lock.json`; `bash scripts/docker_smoke_test.sh` starts the stack and asserts both services answer. A `docker` job in the same workflow builds both images on every push. No hosted-deployment manifest is committed; the Render and Vercel settings live in those dashboards, and `api/index.py` is a placeholder handler, not an application entry point.
 
 ## API
 
